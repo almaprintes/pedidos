@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="AlmaPrint">
+  <meta name="theme-color" content="#E8305A">
+  <meta name="description" content="Gestión de pedidos para AlmaPrint">
+  <title>AlmaPrint Pedidos</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     VIEW 1: DASHBOARD
+═══════════════════════════════════════════ -->
+<section id="view-dashboard" class="view active">
+  <div class="view-header">
+    <div class="app-logo">
+      <div class="logo-mark">A</div>
+      <span class="logo-text">Alma<span>Print</span></span>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" onclick="showView('settings')" title="Ajustes">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Stats grid -->
+  <div class="dash-grid">
+    <div class="stat-card accent-pink" onclick="showView('list')">
+      <div class="stat-label">Pedidos activos</div>
+      <div class="stat-number" id="dash-activos">0</div>
+      <div class="stat-link">Ver todos →</div>
+    </div>
+    <div class="stat-card accent-amber" onclick="setListFilter('urgentes')">
+      <div class="stat-label">🔥 Urgentes</div>
+      <div class="stat-number" id="dash-urgentes">0</div>
+      <div class="stat-link">Ver urgentes →</div>
+    </div>
+    <div class="stat-card accent-purple" onclick="setListFilter('aprobacion')">
+      <div class="stat-label">Pend. aprobación</div>
+      <div class="stat-number" id="dash-aprobaciones">0</div>
+      <div class="stat-link">Ver aprobaciones →</div>
+    </div>
+    <div class="stat-card accent-teal" onclick="setListFilter('cobro')">
+      <div class="stat-label">Pend. cobro</div>
+      <div class="stat-number" id="dash-cobros">0</div>
+      <div class="stat-link">Ver cobros →</div>
+    </div>
+    <div class="stat-card accent-teal" onclick="setListFilter('produccion')">
+      <div class="stat-label">En producción</div>
+      <div class="stat-number" id="dash-produccion">0</div>
+      <div class="stat-link">Ver producción →</div>
+    </div>
+    <div class="stat-card accent-pink" onclick="showView('seguimiento')">
+      <div class="stat-label">Seguimientos</div>
+      <div class="stat-number" id="dash-seguimientos">0</div>
+      <div class="stat-link">Recordar clientes →</div>
+    </div>
+  </div>
+
+  <!-- Bar chart -->
+  <div class="section-title">
+    Resumen por estado
+    <a onclick="showView('kanban')">Ver tablero →</a>
+  </div>
+  <div class="stat-card full-width" style="margin-bottom:20px">
+    <div class="bar-chart" id="dash-bars"></div>
+  </div>
+
+  <!-- Recent orders -->
+  <div class="section-title">
+    Pedidos recientes
+    <a onclick="showView('list')">Ver todos →</a>
+  </div>
+  <div id="dash-recent" class="order-list" style="margin-bottom:16px"></div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════
+     VIEW 2: KANBAN
+═══════════════════════════════════════════ -->
+<section id="view-kanban" class="view">
+  <div class="view-header">
+    <h1>Tablero</h1>
+    <div class="header-actions">
+      <button class="icon-btn" onclick="openNewForm()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="kanban-scroll" id="kanban-cols"></div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════
+     VIEW 3: LISTA
+═══════════════════════════════════════════ -->
+<section id="view-list" class="view">
+  <div class="view-header">
+    <h1>Pedidos</h1>
+    <div class="header-actions">
+      <button class="icon-btn" onclick="openNewForm()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="search-box">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="search" id="list-search" placeholder="Buscar cliente, producto..." autocomplete="off">
+  </div>
+
+  <div class="filter-scroll" id="filter-chips">
+    <button class="filter-chip active" onclick="setListFilter('todos')" data-filter="todos">Todos</button>
+    <button class="filter-chip" onclick="setListFilter('urgentes')" data-filter="urgentes">🔥 Urgentes</button>
+    <button class="filter-chip" onclick="setListFilter('sinfecha')" data-filter="sinfecha">Sin fecha</button>
+    <button class="filter-chip" onclick="setListFilter('seguimiento')" data-filter="seguimiento">Seguimiento</button>
+    <button class="filter-chip" onclick="setListFilter('aprobacion')" data-filter="aprobacion">Pend. aprobación</button>
+    <button class="filter-chip" onclick="setListFilter('cobro')" data-filter="cobro">Pend. cobro</button>
+    <button class="filter-chip" onclick="setListFilter('produccion')" data-filter="produccion">Producción</button>
+    <button class="filter-chip" onclick="setListFilter('entregados')" data-filter="entregados">Entregados</button>
+  </div>
+
+  <div class="section-title">
+    <span id="list-count">0 pedidos</span>
+  </div>
+  <div id="order-list" class="order-list" style="margin-bottom:16px"></div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════
+     VIEW 4: SEGUIMIENTO
+═══════════════════════════════════════════ -->
+<section id="view-seguimiento" class="view">
+  <div class="view-header">
+    <h1>Recordar clientes</h1>
+  </div>
+
+  <div class="remind-banner">
+    <div class="remind-banner-icon">🔔</div>
+    <div class="remind-banner-text">
+      Tienes <strong id="seguim-count">0</strong> clientes para recordar.
+      Contacta con ellos para retomar sus pedidos.
+    </div>
+  </div>
+
+  <div id="seguim-list"></div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════
+     VIEW 5: AJUSTES
+═══════════════════════════════════════════ -->
+<section id="view-settings" class="view">
+  <div class="view-header">
+    <h1>Ajustes</h1>
+  </div>
+
+  <div class="settings-section">
+    <div class="section-title">Copia de seguridad</div>
+    <div class="settings-group">
+      <div class="settings-item" onclick="exportBackup()">
+        <div class="settings-icon si-blue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </div>
+        <div class="settings-item-body">
+          <div class="settings-item-title">Exportar datos (JSON)</div>
+          <div class="settings-item-desc">Guardar copia de seguridad</div>
+        </div>
+        <span class="settings-item-arrow">›</span>
+      </div>
+      <div class="settings-item" onclick="importBackup()">
+        <div class="settings-icon si-green">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+        <div class="settings-item-body">
+          <div class="settings-item-title">Importar datos (JSON)</div>
+          <div class="settings-item-desc">Restaurar copia de seguridad</div>
+        </div>
+        <span class="settings-item-arrow">›</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <div class="section-title">Borrar datos</div>
+    <div class="settings-group">
+      <div class="settings-item" onclick="clearAllData()">
+        <div class="settings-icon si-red">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+        </div>
+        <div class="settings-item-body">
+          <div class="settings-item-title">Borrar todos los datos</div>
+          <div class="settings-item-desc">Esta acción no se puede deshacer</div>
+        </div>
+        <span class="settings-item-arrow">›</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <div class="section-title">Gestión</div>
+    <div class="settings-group">
+      <div class="settings-item" onclick="editWAMessage()">
+        <div class="settings-icon si-green">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        </div>
+        <div class="settings-item-body">
+          <div class="settings-item-title">Mensajes WhatsApp</div>
+          <div class="settings-item-desc">Personalizar mensaje predefinido</div>
+        </div>
+        <span class="settings-item-arrow">›</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <div class="section-title">Información</div>
+    <div class="settings-group">
+      <div class="settings-item" style="cursor:default">
+        <div class="settings-icon si-purple">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div class="settings-item-body">
+          <div class="settings-item-title">AlmaPrint Pedidos</div>
+          <div class="settings-item-desc">Versión 1.0 — Tenerife 🌋</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="settings-warning">
+    <span>⚠️</span>
+    <span>Los datos se guardan <strong>solo en este dispositivo</strong>. Si borras los datos del navegador sin exportar copia, perderás toda la información.</span>
+  </div>
+
+  <div style="height: 16px"></div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════
+     BOTTOM NAV
+═══════════════════════════════════════════ -->
+<nav class="bottom-nav">
+  <button class="nav-item active" data-nav="dashboard" onclick="showView('dashboard')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+    Dashboard
+  </button>
+  <button class="nav-item" data-nav="kanban" onclick="showView('kanban')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="18"/><rect x="10" y="3" width="5" height="12"/><rect x="17" y="3" width="4" height="8"/></svg>
+    Tablero
+  </button>
+  <button class="nav-item" data-nav="list" onclick="showView('list')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    Pedidos
+  </button>
+  <button class="nav-item" data-nav="seguimiento" onclick="showView('seguimiento')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+    Recordar
+  </button>
+  <button class="nav-item" data-nav="settings" onclick="showView('settings')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    Ajustes
+  </button>
+</nav>
+
+<!-- FAB -->
+<button class="fab" onclick="openNewForm()" title="Nuevo pedido">+</button>
+
+
+<!-- ═══════════════════════════════════════════
+     FORM VIEW (fullscreen overlay)
+═══════════════════════════════════════════ -->
+<div id="form-view" class="view-form">
+  <div class="form-header">
+    <button class="btn-cancel" onclick="closeForm()">✕ Cancelar</button>
+    <h2 id="form-title">Nuevo pedido</h2>
+    <button class="btn-save" onclick="saveForm()">Guardar</button>
+  </div>
+
+  <div class="form-body">
+    <!-- Cliente -->
+    <div class="form-section">
+      <div class="form-section-title">Cliente</div>
+      <div class="form-field">
+        <label class="form-label">Nombre del cliente *</label>
+        <input class="form-input" id="f-client" type="text" placeholder="Ej: María López" autocomplete="off">
+      </div>
+      <div class="form-field">
+        <label class="form-label">Teléfono / WhatsApp</label>
+        <input class="form-input" id="f-phone" type="tel" placeholder="+34 600 000 000">
+      </div>
+    </div>
+
+    <!-- Producto -->
+    <div class="form-section">
+      <div class="form-section-title">Producto</div>
+      <div class="form-field">
+        <label class="form-label">Producto *</label>
+        <select class="form-select" id="f-product">
+          <option value="">— Selecciona —</option>
+          <option>Taza personalizada</option>
+          <option>Camiseta DTF</option>
+          <option>Azulejo 15x15</option>
+          <option>Aluminio A4</option>
+          <option>Imán de nevera</option>
+          <option>Pegatina</option>
+          <option>Tarjeta de visita</option>
+          <option>Gorra sublimada</option>
+          <option>Pack personalizado</option>
+          <option>Otro</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label class="form-label">O escribe el producto</label>
+        <input class="form-input" id="f-product-custom" type="text" placeholder="Otro producto...">
+      </div>
+      <div class="form-field">
+        <label class="form-label">Descripción del pedido</label>
+        <textarea class="form-textarea" id="f-description" placeholder="Describe el pedido, talla, color, diseño..."></textarea>
+      </div>
+    </div>
+
+    <!-- Estado y prioridad -->
+    <div class="form-section">
+      <div class="form-section-title">Estado y prioridad</div>
+      <div class="form-row">
+        <div class="form-field">
+          <label class="form-label">Estado</label>
+          <select class="form-select" id="f-status">
+            <option value="idea">Idea / Cliente potencial</option>
+            <option value="pendiente">Pedido pendiente</option>
+            <option value="diseño">Diseño</option>
+            <option value="aprobacion">Esperando aprobación</option>
+            <option value="produccion">Producción</option>
+            <option value="listo">Listo para entregar</option>
+            <option value="entregado">Entregado</option>
+            <option value="seguimiento">Seguimiento</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Prioridad</label>
+          <select class="form-select" id="f-priority">
+            <option>Normal</option>
+            <option>Importante</option>
+            <option>Urgente</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fechas -->
+    <div class="form-section">
+      <div class="form-section-title">Fechas</div>
+      <div class="form-row">
+        <div class="form-field">
+          <label class="form-label">Fecha de entrega</label>
+          <input class="form-input" id="f-delivery" type="date">
+        </div>
+        <div class="form-field">
+          <label class="form-label">Próximo seguimiento</label>
+          <input class="form-input" id="f-followup" type="date">
+        </div>
+      </div>
+    </div>
+
+    <!-- Pago -->
+    <div class="form-section">
+      <div class="form-section-title">Pago</div>
+      <div class="form-field">
+        <label class="form-label">Estado del pago</label>
+        <select class="form-select" id="f-payment">
+          <option value="no">No presupuestado</option>
+          <option value="pres">Presupuesto enviado</option>
+          <option value="pendiente">Pendiente de pago</option>
+          <option value="senal">Señal pagada</option>
+          <option value="pagado">Pagado</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label class="form-label">Precio estimado (€)</label>
+          <input class="form-input" id="f-price" type="number" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-field">
+          <label class="form-label">Importe cobrado (€)</label>
+          <input class="form-input" id="f-paid" type="number" step="0.01" placeholder="0.00">
+        </div>
+      </div>
+    </div>
+
+    <!-- Notas -->
+    <div class="form-section">
+      <div class="form-section-title">Notas internas</div>
+      <div class="form-field">
+        <textarea class="form-textarea" id="f-notes" placeholder="Notas solo para ti..."></textarea>
+      </div>
+    </div>
+
+    <!-- Fotos -->
+    <div class="form-section">
+      <div class="form-section-title">Fotos / referencias</div>
+      <div class="photo-upload-area" onclick="document.getElementById('photo-input').click()">
+        📷 Toca para añadir fotos
+      </div>
+      <input type="file" id="photo-input" accept="image/*" multiple style="display:none" onchange="handlePhotoAdd(event)">
+      <div class="photo-grid" id="photo-preview-grid"></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     DETAIL VIEW (fullscreen overlay)
+═══════════════════════════════════════════ -->
+<div id="detail-view" class="detail-view">
+  <!-- Hero header -->
+  <div class="detail-hero">
+    <div class="detail-hero-actions">
+      <button id="detail-fav-btn" onclick="toggleFavorite()" title="Favorito">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      </button>
+      <button onclick="showOrderMenu(currentOrder?.id)" title="Más opciones">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+      </button>
+    </div>
+    <button class="detail-hero-back" onclick="closeDetail()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <div class="detail-client" id="detail-client"></div>
+    <div class="detail-product" id="detail-product"></div>
+    <div class="detail-badges" id="detail-badges"></div>
+  </div>
+
+  <!-- Quick action bar -->
+  <div class="detail-actions">
+    <button class="action-btn whatsapp" onclick="sendWhatsApp(currentOrder?.id)">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+      WhatsApp
+    </button>
+    <button class="action-btn call" onclick="currentOrder?.phone && (location.href='tel:'+currentOrder.phone)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.95 10.5 19.79 19.79 0 01.88 1.87 2 2 0 012.86 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+      Llamar
+    </button>
+    <button class="action-btn edit" onclick="openEditForm()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      Editar
+    </button>
+    <button class="action-btn" onclick="confirmDelete()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--pink)"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+      Eliminar
+    </button>
+  </div>
+
+  <!-- Tabs -->
+  <div class="detail-tabs">
+    <div class="detail-tab active" data-tab="info" onclick="renderDetailTab('info')">Información</div>
+    <div class="detail-tab" data-tab="tasks" onclick="renderDetailTab('tasks')">Tareas</div>
+    <div class="detail-tab" data-tab="notas" onclick="renderDetailTab('notas')">Notas</div>
+  </div>
+
+  <div id="dtab-info" class="detail-tab-content active"></div>
+  <div id="dtab-tasks" class="detail-tab-content"></div>
+  <div id="dtab-notas" class="detail-tab-content"></div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     MODALS
+═══════════════════════════════════════════ -->
+
+<!-- WhatsApp modal -->
+<div class="modal-overlay" id="modal-wa" onclick="closeModal('modal-wa')">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📱 Enviar WhatsApp</div>
+    <p style="font-size:0.82rem;color:var(--text-2);margin-bottom:10px">Personaliza el mensaje antes de enviarlo:</p>
+    <textarea class="modal-textarea" id="wa-textarea" rows="5"></textarea>
+    <div class="modal-actions">
+      <button class="modal-btn modal-btn-primary" id="wa-send-btn">
+        Abrir WhatsApp
+      </button>
+      <button class="modal-btn modal-btn-secondary" onclick="closeModal('modal-wa')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Order context menu -->
+<div class="modal-overlay" id="modal-menu" onclick="closeModal('modal-menu')">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="menu-order-title" style="font-size:0.9rem;color:var(--text-2)"></div>
+    <div class="modal-actions">
+      <button class="modal-btn modal-btn-secondary" onclick="openDetail(currentOrder?.id); closeModal('modal-menu')">Ver detalle</button>
+      <button class="modal-btn modal-btn-secondary" onclick="openEditForm(); closeModal('modal-menu')">Editar pedido</button>
+      <button class="modal-btn modal-btn-secondary" onclick="duplicateOrder()">Duplicar pedido</button>
+      <button class="modal-btn modal-btn-secondary" onclick="sendWhatsApp(currentOrder?.id); closeModal('modal-menu')">Enviar WhatsApp</button>
+      <button class="modal-btn modal-btn-danger" onclick="confirmDelete()">Eliminar pedido</button>
+      <button class="modal-btn modal-btn-secondary" onclick="closeModal('modal-menu')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm delete -->
+<div class="modal-overlay" id="modal-confirm" onclick="closeModal('modal-confirm')">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title">¿Eliminar pedido?</div>
+    <p style="font-size:0.85rem;color:var(--text-2);margin-bottom:16px">Esta acción no se puede deshacer.</p>
+    <div class="modal-actions">
+      <button class="modal-btn modal-btn-danger" id="confirm-delete-btn">Sí, eliminar</button>
+      <button class="modal-btn modal-btn-secondary" onclick="closeModal('modal-confirm')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- WA message edit -->
+<div class="modal-overlay" id="modal-wa-edit" onclick="closeModal('modal-wa-edit')">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Mensaje WhatsApp predefinido</div>
+    <p style="font-size:0.8rem;color:var(--text-2);margin-bottom:8px">Usa <strong>{cliente}</strong> y <strong>{producto}</strong> para insertar datos del pedido.</p>
+    <textarea class="modal-textarea" id="wa-msg-edit" rows="5"></textarea>
+    <div class="modal-actions">
+      <button class="modal-btn modal-btn-primary" onclick="saveWAMessage()">Guardar mensaje</button>
+      <button class="modal-btn modal-btn-secondary" onclick="closeModal('modal-wa-edit')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Photo fullscreen -->
+<div class="modal-overlay" id="modal-photo" onclick="closeModal('modal-photo')" style="align-items:center;justify-content:center;padding:20px">
+  <img id="fullphoto-img" style="max-width:100%;max-height:85dvh;border-radius:12px;object-fit:contain">
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script src="./app.js"></script>
+<script>
+// Extra helpers that need DOM refs
+function setListFilter(filter) {
+  listFilter = filter;
+  document.querySelectorAll('.filter-chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.filter === filter);
+  });
+  showView('list');
+}
+</script>
+</body>
+</html>
