@@ -146,7 +146,25 @@ function isOverdue(dateStr) {
   if (!dateStr) return false;
   return new Date(dateStr) <= new Date();
 }
+function toNumber(value) {
+  const n = parseFloat(String(value || '').replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+}
 
+function normalizePaymentStatus(order) {
+  const price = toNumber(order.price);
+  const paid = toNumber(order.paid);
+
+  if (price > 0 && paid >= price) {
+    order.payment = 'pagado';
+  } else if (price > 0 && paid > 0 && paid < price) {
+    order.payment = 'senal';
+  } else if (price > 0 && paid <= 0 && (order.payment === 'pagado' || order.payment === 'senal')) {
+    order.payment = 'pendiente';
+  }
+
+  return order;
+}
 function getSetting(key, def = '') {
   return localStorage.getItem('ap_' + key) || def;
 }
@@ -581,6 +599,8 @@ async function saveForm() {
     createdAt: existing?.createdAt || now,
     updatedAt: now,
   };
+
+  normalizePaymentStatus(order);
 
   if (isEdit) {
     addHistoryEntry(order, 'Pedido editado');
