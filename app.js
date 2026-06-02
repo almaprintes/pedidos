@@ -5,7 +5,7 @@
 
 // ─── DB ──────────────────────────────────────────────
 const DB_NAME = 'almaprint_db';
-const DB_VER  = 1;
+const DB_VER  = 2;
 let db;
 
 function openDB() {
@@ -21,6 +21,11 @@ function openDB() {
       }
       if (!d.objectStoreNames.contains('settings')) {
         d.createObjectStore('settings', { keyPath: 'key' });
+      }
+             if (!d.objectStoreNames.contains('clients')) {
+        const clientStore = d.createObjectStore('clients', { keyPath: 'id' });
+        clientStore.createIndex('normalizedName', 'normalizedName', { unique: true });
+        clientStore.createIndex('name', 'name');
       }
     };
     req.onsuccess = e => { db = e.target.result; resolve(db); };
@@ -101,6 +106,7 @@ const DEFAULT_WA_MSG = 'Hola {cliente}, soy Juan de AlmaPrint. Te escribo para r
 
 // ─── STATE ───────────────────────────────────────────
 let orders = [];
+let clients = [];
 let currentView = 'dashboard';
 let currentOrder = null;
 let editingOrderId = null;
@@ -164,6 +170,86 @@ function normalizePaymentStatus(order) {
   }
 
   return order;
+}
+
+function normalizeClientName(name) {
+  return String(name || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+function findClientByName(name) {
+  const normalizedName = normalizeClientName(name);
+  if (!normalizedName) return null;
+  return clients.find(c => c.normalizedName === normalizedName) || null;
+}
+async function upsertClientFromOrder(order) {
+  const normalizedName = normalizeClientName(order.client);
+  if (!normalizedName) return order;
+
+  let client = findClientByName(order.client);
+  const now = Date.now();
+
+  if (client) {
+    if (order.phone && order.phone !== client.phone) {
+      client.phone = order.phone;
+    }
+
+    client.lastOrderAt = now;
+    client.updatedAt = now;
+
+    await dbPut('clients', client);
+
+    clients = clients.map(c => c.id === client.id ? client : c);
+
+    order.clientId = client.id;
+    order.client = client.name;
+    order.phone = order.phone || client.phone || '';
+
+    return order;
+  }
+
+  client = {
+    id: uid(),
+    name: order.client,
+    normalizedName,
+    phone: order.phone || '',
+    createdAt: now,
+    updatedAt: now,
+    lastOrderAt: now
+  };
+
+  await dbPut('clients', client);
+  clients.push(client);
+
+  order.clientId = client.id;
+
+  return order;
+}
+function refreshClientSuggestions() {
+  const list = document.getElementById('client-suggestions');
+  if (!list) return;
+
+  list.innerHTML = clients
+    .sort((a, b) => a.name.localeCompare(b.name, 'es'))
+    .map(c => `<option value="${escHtml(c.name)}">${escHtml(c.phone || '')}</option>`)
+    .join('');
+}
+function autofillClientData() {
+  const clientInput = document.getElementById('f-client');
+  const phoneInput = document.getElementById('f-phone');
+  if (!clientInput || !phoneInput) return;
+
+  const client = findClientByName(clientInput.value);
+  if (!client) return;
+
+  clientInput.value = client.name;
+
+  if (client.phone && !phoneInput.value.trim()) {
+    phoneInput.value = client.phone;
+  }
 }
 function getSetting(key, def = '') {
   return localStorage.getItem('ap_' + key) || def;
@@ -600,7 +686,8 @@ async function saveForm() {
     updatedAt: now,
   };
 
-  normalizePaymentStatus(order);
+normalizePaymentStatus(order);
+await upsertClientFromOrder(order);
 
   if (isEdit) {
     addHistoryEntry(order, 'Pedido editado');
@@ -776,8 +863,16 @@ function escHtml(s) {
 // ─── INIT ─────────────────────────────────────────────
 async function init() {
   await openDB();
-  orders = await dbGetAll('orders');
-  showView('dashboard');
+orders = await dbGetAll('orders');
+clients = await dbGetAll('clients');
+
+for (const order of orders) {
+  await upsertClientFromOrder(order);
+  await dbPut('orders', order);
+}
+
+refreshClientSuggestions();
+showView('dashboard');
   
   // Register SW
   if ('serviceWorker' in navigator) {
