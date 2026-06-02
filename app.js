@@ -884,6 +884,8 @@ showView('dashboard');
     listSearch = e.target.value;
     renderList();
   });
+document.getElementById('f-client').addEventListener('change', autofillClientData);
+document.getElementById('f-client').addEventListener('blur', autofillClientData);
 }
 
 document.addEventListener('DOMContentLoaded', init);
