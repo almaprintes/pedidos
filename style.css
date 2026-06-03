@@ -763,3 +763,47 @@ h3 { font-size: 1rem; font-weight: 600; }
 .pago-pend { color: var(--amber); }
 .pago-senal { color: var(--teal); }
 .pago-ok { color: #16A34A; }
+.client-autocomplete-wrap {
+  position: relative;
+}
+
+.client-autocomplete {
+  display: none;
+  position: absolute;
+  z-index: 9999;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 14px;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.14);
+  overflow: hidden;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.client-autocomplete.active {
+  display: block;
+}
+
+.client-autocomplete-item {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  cursor: pointer;
+}
+
+.client-autocomplete-item:last-child {
+  border-bottom: none;
+}
+
+.client-autocomplete-name {
+  font-weight: 700;
+  color: var(--text, #111827);
+}
+
+.client-autocomplete-phone {
+  margin-top: 2px;
+  font-size: 0.8rem;
+  color: var(--text-2, #6b7280);
+}
