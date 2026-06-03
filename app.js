@@ -954,3 +954,4 @@ async function init() {
     setTimeout(autofillClientData, 150);
   });
 }
+document.addEventListener('DOMContentLoaded', init);
