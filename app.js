@@ -921,17 +921,20 @@ function escHtml(s) {
 // ─── INIT ─────────────────────────────────────────────
 async function init() {
   await openDB();
-orders = await dbGetAll('orders');
-clients = await dbGetAll('clients');
 
-for (const order of orders) {
-  await upsertClientFromOrder(order);
-  await dbPut('orders', order);
-}
+  orders = await dbGetAll('orders');
+  clients = await dbGetAll('clients');
 
-refreshClientSuggestions();
-showView('dashboard');
-  
+  for (const order of orders) {
+    await upsertClientFromOrder(order);
+    await dbPut('orders', order);
+  }
+
+  clients = await dbGetAll('clients');
+
+  refreshClientSuggestions();
+  showView('dashboard');
+
   // Register SW
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
@@ -942,12 +945,12 @@ showView('dashboard');
     listSearch = e.target.value;
     renderList();
   });
-const clientInput = document.getElementById('f-client');
 
-clientInput.addEventListener('input', renderClientAutocomplete);
-clientInput.addEventListener('change', autofillClientData);
-clientInput.addEventListener('blur', () => {
-  setTimeout(autofillClientData, 150);
-});}
+  const clientInput = document.getElementById('f-client');
 
-document.addEventListener('DOMContentLoaded', init);
+  clientInput.addEventListener('input', renderClientAutocomplete);
+  clientInput.addEventListener('change', autofillClientData);
+  clientInput.addEventListener('blur', () => {
+    setTimeout(autofillClientData, 150);
+  });
+}
