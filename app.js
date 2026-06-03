@@ -709,64 +709,76 @@ function resetForm() {
 }
 
 async function saveForm() {
-  const client = document.getElementById('f-client').value.trim();
-  const productSel = document.getElementById('f-product').value;
-  const productCustom = document.getElementById('f-product-custom').value.trim();
-  const product = productCustom || productSel;
+  try {
+    const client = document.getElementById('f-client').value.trim();
+    const productSel = document.getElementById('f-product').value;
+    const productCustom = document.getElementById('f-product-custom').value.trim();
+    const product = productCustom || productSel;
 
-  if (!client) { showToast('Escribe el nombre del cliente'); return; }
-  if (!product) { showToast('Selecciona o escribe un producto'); return; }
+    if (!client) { showToast('Escribe el nombre del cliente'); return; }
+    if (!product) { showToast('Selecciona o escribe un producto'); return; }
 
-  const now = Date.now();
-  const isEdit = !!editingOrderId;
-  const existing = isEdit ? orders.find(o => o.id === editingOrderId) : null;
+    const now = Date.now();
+    const isEdit = !!editingOrderId;
+    const existing = isEdit ? orders.find(o => o.id === editingOrderId) : null;
 
-  const order = {
-    id: isEdit ? editingOrderId : uid(),
-    client,
-    phone: document.getElementById('f-phone').value.trim(),
-    product,
-    description: document.getElementById('f-description').value.trim(),
-    status: document.getElementById('f-status').value,
-    priority: document.getElementById('f-priority').value,
-    deliveryDate: document.getElementById('f-delivery').value || null,
-    followup: document.getElementById('f-followup').value || null,
-    payment: document.getElementById('f-payment').value,
-    price: document.getElementById('f-price').value || null,
-    paid: document.getElementById('f-paid').value || null,
-    notes: document.getElementById('f-notes').value.trim(),
-    photos: formPhotos,
-    tasks: existing?.tasks || DEFAULT_TASKS.map(l => ({ label: l, done: false })),
-    quickNotes: existing?.quickNotes || [],
-    history: existing?.history || [],
-    favorite: existing?.favorite || false,
-    createdAt: existing?.createdAt || now,
-    updatedAt: now,
-  };
+    const order = {
+      id: isEdit ? editingOrderId : uid(),
+      client,
+      clientId: existing?.clientId || null,
+      phone: document.getElementById('f-phone').value.trim(),
+      product,
+      description: document.getElementById('f-description').value.trim(),
+      status: document.getElementById('f-status').value,
+      priority: document.getElementById('f-priority').value,
+      deliveryDate: document.getElementById('f-delivery').value || null,
+      followup: document.getElementById('f-followup').value || null,
+      payment: document.getElementById('f-payment').value,
+      price: document.getElementById('f-price').value || null,
+      paid: document.getElementById('f-paid').value || null,
+      notes: document.getElementById('f-notes').value.trim(),
+      photos: formPhotos,
+      tasks: existing?.tasks || DEFAULT_TASKS.map(l => ({ label: l, done: false })),
+      quickNotes: existing?.quickNotes || [],
+      history: existing?.history || [],
+      favorite: existing?.favorite || false,
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+    };
 
-normalizePaymentStatus(order);
-// await upsertClientFromOrder(order);
+    normalizePaymentStatus(order);
+    await upsertClientFromOrder(order);
 
-  if (isEdit) {
-    addHistoryEntry(order, 'Pedido editado');
-  } else {
-    addHistoryEntry(order, 'Pedido creado');
-  }
+    if (isEdit) {
+      addHistoryEntry(order, 'Pedido editado');
+    } else {
+      addHistoryEntry(order, 'Pedido creado');
+    }
 
-  await dbPut('orders', order);
-  if (isEdit) {
-    orders = orders.map(o => o.id === order.id ? order : o);
-    currentOrder = order;
-  } else {
-    orders.push(order);
-  }
+    await dbPut('orders', order);
 
-  closeForm();
-  showToast(isEdit ? 'Pedido actualizado' : 'Pedido creado ✓');
-  if (isEdit) {
-    renderDetailView();
-  } else {
-    showView(currentView);
+    if (isEdit) {
+      orders = orders.map(o => o.id === order.id ? order : o);
+      currentOrder = order;
+    } else {
+      orders.push(order);
+    }
+
+    clients = await dbGetAll('clients');
+    refreshClientSuggestions();
+
+    closeForm();
+    showToast(isEdit ? 'Pedido actualizado' : 'Pedido creado ✓');
+
+    if (isEdit) {
+      renderDetailView();
+      showView(currentView);
+    } else {
+      showView(currentView);
+    }
+  } catch (err) {
+    console.error('Error al guardar pedido:', err);
+    showToast('Error al guardar. Recarga la app.');
   }
 }
 
@@ -857,7 +869,7 @@ function closeModal(id) {
 
 // ─── SETTINGS ────────────────────────────────────────
 async function exportBackup() {
-  const data = { version: 1, exportedAt: new Date().toISOString(), orders };
+  const data = { version: 2, exportedAt: new Date().toISOString(), orders, clients };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -879,8 +891,21 @@ function importBackup() {
       const data = JSON.parse(text);
       if (!data.orders || !Array.isArray(data.orders)) throw new Error('Formato incorrecto');
       await dbClear('orders');
-      for (const o of data.orders) await dbPut('orders', o);
+      await dbClear('clients');
+
       orders = data.orders;
+      clients = Array.isArray(data.clients) ? data.clients : [];
+
+      for (const c of clients) await dbPut('clients', c);
+
+      for (const o of orders) {
+        normalizePaymentStatus(o);
+        await upsertClientFromOrder(o);
+        await dbPut('orders', o);
+      }
+
+      clients = await dbGetAll('clients');
+      refreshClientSuggestions();
       showToast('Copia importada ✓ — ' + orders.length + ' pedidos');
       showView(currentView);
     } catch {
@@ -894,7 +919,9 @@ async function clearAllData() {
   const confirmed = prompt('Escribe BORRAR para confirmar el borrado total:');
   if (confirmed !== 'BORRAR') { showToast('Cancelado'); return; }
   await dbClear('orders');
+  await dbClear('clients');
   orders = [];
+  clients = [];
   showToast('Todos los datos eliminados');
   showView('dashboard');
 }
