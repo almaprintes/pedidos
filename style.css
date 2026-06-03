@@ -811,3 +811,20 @@ h3 { font-size: 1rem; font-weight: 600; }
   font-size: 0.8rem;
   color: #c9c9d4;
 }
+.client-autocomplete {
+  background: #1C1C26 !important;
+  border: 1px solid #2A2A38 !important;
+}
+
+.client-autocomplete-item {
+  background: #1C1C26 !important;
+  color: #F0F0F5 !important;
+}
+
+.client-autocomplete-name {
+  color: #F0F0F5 !important;
+}
+
+.client-autocomplete-phone {
+  color: #9CA3AF !important;
+}
