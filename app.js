@@ -745,7 +745,7 @@ async function saveForm() {
   };
 
 normalizePaymentStatus(order);
-await upsertClientFromOrder(order);
+// await upsertClientFromOrder(order);
 
   if (isEdit) {
     addHistoryEntry(order, 'Pedido editado');
