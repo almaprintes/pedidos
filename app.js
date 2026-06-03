@@ -5,7 +5,7 @@
 
 // ─── DB ──────────────────────────────────────────────
 const DB_NAME = 'almaprint_db';
-const DB_VER  = 3;
+const DB_VER  = 4;
 let db;
 
 function openDB() {
@@ -26,6 +26,11 @@ function openDB() {
         const clientStore = d.createObjectStore('clients', { keyPath: 'id' });
         clientStore.createIndex('normalizedName', 'normalizedName', { unique: true });
         clientStore.createIndex('name', 'name');
+      }
+      if (!d.objectStoreNames.contains('products')) {
+        const productStore = d.createObjectStore('products', { keyPath: 'id' });
+        productStore.createIndex('normalizedName', 'normalizedName', { unique: true });
+        productStore.createIndex('name', 'name');
       }
     };
     req.onsuccess = e => { db = e.target.result; resolve(db); };
@@ -91,11 +96,20 @@ const PAYMENT_STATES = [
   { id: 'pagado',   label: 'Pagado', css: 'pago-ok' },
 ];
 
-const PRODUCTS = [
-  'Taza personalizada','Camiseta DTF','Azulejo 15x15','Aluminio A4',
-  'Imán de nevera','Pegatina','Tarjeta de visita','Gorra sublimada',
-  'Pack personalizado','Otro'
+const DEFAULT_PRODUCTS = [
+  { name: 'Taza personalizada', description: 'Taza sublimada personalizada', price: '' },
+  { name: 'Camiseta DTF', description: 'Camiseta personalizada con DTF', price: '' },
+  { name: 'Azulejo 15x15', description: 'Azulejo personalizado 15x15 cm', price: '' },
+  { name: 'Aluminio A4', description: 'Aluminio sublimado tamaño A4', price: '' },
+  { name: 'Imán de nevera', description: 'Imán personalizado', price: '' },
+  { name: 'Pegatina', description: 'Pegatina personalizada', price: '' },
+  { name: 'Tarjeta de visita', description: 'Tarjeta de visita personalizada', price: '' },
+  { name: 'Gorra sublimada', description: 'Gorra sublimada personalizada', price: '' },
+  { name: 'Pack personalizado', description: 'Pack personalizado AlmaPrint', price: '' },
+  { name: 'Otro', description: 'Producto personalizado', price: '' }
 ];
+
+const PRODUCTS = DEFAULT_PRODUCTS.map(p => p.name);
 
 const DEFAULT_TASKS = [
   'Recibir fotos','Crear diseño','Enviar diseño','Aprobar diseño',
@@ -107,10 +121,15 @@ const DEFAULT_WA_MSG = 'Hola {cliente}, soy Juan de AlmaPrint. Te escribo para r
 // ─── STATE ───────────────────────────────────────────
 let orders = [];
 let clients = [];
+let products = [];
 let currentClient = null;
+let currentProduct = null;
 let editingClientId = null;
+let editingProductId = null;
 let clientSearch = '';
+let productSearch = '';
 let orderFormReturnAfterClient = false;
+let orderFormReturnAfterProduct = false;
 let currentView = 'dashboard';
 let currentOrder = null;
 let editingOrderId = null;
@@ -346,6 +365,7 @@ function showView(viewId) {
   if (viewId === 'kanban') renderKanban();
   if (viewId === 'list') renderList();
   if (viewId === 'clients') renderClients();
+  if (viewId === 'products') renderProducts();
   if (viewId === 'seguimiento') renderSeguimiento();
   if (viewId === 'settings') renderSettings();
 }
@@ -669,6 +689,270 @@ async function migrateOrdersToClients() {
   clients = await dbGetAll('clients');
 }
 
+function normalizeProductName(name) {
+  return String(name || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function findProductByName(name) {
+  const normalizedName = normalizeProductName(name);
+  if (!normalizedName) return null;
+  return products.find(p => p.normalizedName === normalizedName) || null;
+}
+
+async function seedDefaultProducts() {
+  if (products.length) return;
+  const now = Date.now();
+  for (const item of DEFAULT_PRODUCTS) {
+    const product = {
+      id: uid(),
+      name: item.name,
+      normalizedName: normalizeProductName(item.name),
+      description: item.description || '',
+      price: item.price || '',
+      notes: '',
+      createdAt: now,
+      updatedAt: now
+    };
+    await dbPut('products', product);
+    products.push(product);
+  }
+}
+
+async function upsertProductFromOrder(order) {
+  const normalizedName = normalizeProductName(order.product);
+  if (!normalizedName) return order;
+
+  let product = findProductByName(order.product);
+  const now = Date.now();
+
+  if (product) {
+    product.lastOrderAt = now;
+    product.updatedAt = now;
+    await dbPut('products', product);
+    products = products.map(p => p.id === product.id ? product : p);
+    order.productId = product.id;
+    order.product = product.name;
+    return order;
+  }
+
+  product = {
+    id: uid(),
+    name: order.product,
+    normalizedName,
+    description: order.description || '',
+    price: order.price || '',
+    notes: '',
+    createdAt: now,
+    updatedAt: now,
+    lastOrderAt: now
+  };
+
+  await dbPut('products', product);
+  products.push(product);
+  order.productId = product.id;
+  return order;
+}
+
+function refreshProductSelect(selectedId = '') {
+  const select = document.getElementById('f-product-select');
+  if (!select) return;
+
+  const sorted = [...products].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  select.innerHTML = '<option value="">— Selecciona producto —</option>' + sorted.map(p => {
+    const price = p.price ? ' · ' + String(p.price).replace('.', ',') + ' €' : '';
+    return `<option value="${escHtml(p.id)}">${escHtml(p.name)}${price}</option>`;
+  }).join('');
+
+  if (selectedId) select.value = selectedId;
+}
+
+function syncProductFromSelect() {
+  const select = document.getElementById('f-product-select');
+  const priceInput = document.getElementById('f-price');
+  const descInput = document.getElementById('f-description');
+  if (!select) return null;
+
+  const product = products.find(p => p.id === select.value) || null;
+  if (product) {
+    if (priceInput && product.price && !priceInput.value) priceInput.value = product.price;
+    if (descInput && product.description && !descInput.value.trim()) descInput.value = product.description;
+  }
+  return product;
+}
+
+function renderProducts() {
+  const input = document.getElementById('product-search');
+  const list = document.getElementById('product-list');
+  const countEl = document.getElementById('product-count');
+  if (!list) return;
+
+  const q = normalizeProductName(productSearch);
+  let filtered = [...products];
+  if (q) {
+    filtered = filtered.filter(p =>
+      p.normalizedName.includes(q) ||
+      normalizeProductName(p.description).includes(q)
+    );
+  }
+
+  filtered.sort((a, b) => (b.lastOrderAt || b.updatedAt || 0) - (a.lastOrderAt || a.updatedAt || 0));
+  if (countEl) countEl.textContent = `${filtered.length} producto${filtered.length !== 1 ? 's' : ''}`;
+  if (input && input.value !== productSearch) input.value = productSearch;
+
+  list.innerHTML = filtered.length
+    ? filtered.map(productListCard).join('')
+    : '<div class="empty-state"><div class="empty-icon">🏷️</div><div class="empty-title">Sin productos</div><div class="empty-desc">Crea tu primer producto para usarlo en pedidos</div></div>';
+}
+
+function productListCard(p) {
+  const productOrders = orders.filter(o => o.productId === p.id || normalizeProductName(o.product) === p.normalizedName);
+  const total = productOrders.reduce((sum, o) => sum + toNumber(o.paid || o.price), 0);
+  const price = p.price ? `${String(p.price).replace('.', ',')} €` : 'Sin precio';
+  return `<div class="client-card" onclick="openProductDetail('${p.id}')">
+    <div class="client-avatar">🏷️</div>
+    <div class="client-card-body">
+      <div class="client-card-name">${escHtml(p.name)}</div>
+      <div class="client-card-phone">${escHtml(price)}</div>
+      <div class="client-card-meta">${productOrders.length} pedido${productOrders.length !== 1 ? 's' : ''} · ${total.toFixed(2).replace('.', ',')} €</div>
+    </div>
+    <span class="settings-item-arrow">›</span>
+  </div>`;
+}
+
+function openProductDetail(id) {
+  currentProduct = products.find(p => p.id === id);
+  if (!currentProduct) return;
+  renderProductDetail();
+  document.getElementById('product-detail-view').classList.add('active');
+}
+
+function closeProductDetail() {
+  document.getElementById('product-detail-view').classList.remove('active');
+}
+
+function renderProductDetail() {
+  const p = currentProduct;
+  const body = document.getElementById('product-detail-body');
+  const title = document.getElementById('product-detail-title');
+  if (!p || !body || !title) return;
+  title.textContent = p.name;
+  const productOrders = orders
+    .filter(o => o.productId === p.id || normalizeProductName(o.product) === p.normalizedName)
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const total = productOrders.reduce((sum, o) => sum + toNumber(o.paid || o.price), 0);
+  body.innerHTML = `
+    <div class="client-summary-card">
+      <div class="client-summary-name">${escHtml(p.name)}</div>
+      <div class="client-summary-phone">${p.price ? '💶 ' + escHtml(String(p.price).replace('.', ',')) + ' €' : 'Sin precio'}</div>
+      ${p.description ? `<div class="client-summary-notes">${escHtml(p.description)}</div>` : ''}
+      ${p.notes ? `<div class="client-summary-notes">${escHtml(p.notes)}</div>` : ''}
+      <div class="client-summary-stats">
+        <div><strong>${productOrders.length}</strong><span>Pedidos</span></div>
+        <div><strong>${total.toFixed(2).replace('.', ',')} €</strong><span>Total</span></div>
+      </div>
+      <div class="client-summary-actions">
+        <button class="modal-btn modal-btn-secondary" onclick="openEditProductForm('${p.id}')">Editar</button>
+      </div>
+    </div>
+    <div class="section-title">Pedidos con este producto</div>
+    <div class="order-list">
+      ${productOrders.length ? productOrders.map(orderListCard).join('') : '<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">Sin pedidos</div></div>'}
+    </div>`;
+}
+
+function openNewProductForm(returnToOrderForm = false) {
+  editingProductId = null;
+  orderFormReturnAfterProduct = !!returnToOrderForm;
+  document.getElementById('product-form-title').textContent = 'Nuevo producto';
+  document.getElementById('pf-name').value = '';
+  document.getElementById('pf-description').value = '';
+  document.getElementById('pf-price').value = '';
+  document.getElementById('pf-notes').value = '';
+  document.getElementById('product-form-view').classList.add('active');
+}
+
+function openEditProductForm(id) {
+  const p = products.find(x => x.id === id) || currentProduct;
+  if (!p) return;
+  editingProductId = p.id;
+  orderFormReturnAfterProduct = false;
+  document.getElementById('product-form-title').textContent = 'Editar producto';
+  document.getElementById('pf-name').value = p.name || '';
+  document.getElementById('pf-description').value = p.description || '';
+  document.getElementById('pf-price').value = p.price || '';
+  document.getElementById('pf-notes').value = p.notes || '';
+  document.getElementById('product-form-view').classList.add('active');
+}
+
+function closeProductForm() {
+  document.getElementById('product-form-view').classList.remove('active');
+}
+
+async function saveProductForm() {
+  const name = document.getElementById('pf-name').value.trim();
+  const description = document.getElementById('pf-description').value.trim();
+  const price = document.getElementById('pf-price').value || '';
+  const notes = document.getElementById('pf-notes').value.trim();
+  if (!name) { showToast('Escribe el nombre del producto'); return; }
+
+  const normalizedName = normalizeProductName(name);
+  const now = Date.now();
+  let existing = products.find(p => p.normalizedName === normalizedName && p.id !== editingProductId);
+
+  if (existing) {
+    existing.description = description || existing.description || '';
+    existing.price = price || existing.price || '';
+    existing.notes = notes || existing.notes || '';
+    existing.updatedAt = now;
+    await dbPut('products', existing);
+    products = products.map(p => p.id === existing.id ? existing : p);
+    refreshProductSelect(existing.id);
+    showToast('Producto ya existía, actualizado');
+    if (orderFormReturnAfterProduct) syncProductFromSelect();
+    closeProductForm();
+    renderProducts();
+    return;
+  }
+
+  let product = editingProductId ? products.find(p => p.id === editingProductId) : null;
+  if (product) {
+    product.name = name;
+    product.normalizedName = normalizedName;
+    product.description = description;
+    product.price = price;
+    product.notes = notes;
+    product.updatedAt = now;
+  } else {
+    product = { id: uid(), name, normalizedName, description, price, notes, createdAt: now, updatedAt: now, lastOrderAt: null };
+  }
+
+  await dbPut('products', product);
+  if (editingProductId) products = products.map(p => p.id === product.id ? product : p);
+  else products.push(product);
+
+  refreshProductSelect(product.id);
+  if (orderFormReturnAfterProduct) syncProductFromSelect();
+  closeProductForm();
+  showToast(editingProductId ? 'Producto actualizado' : 'Producto creado ✓');
+  renderProducts();
+  if (currentProduct?.id === product.id) { currentProduct = product; renderProductDetail(); }
+}
+
+async function migrateOrdersToProducts() {
+  await seedDefaultProducts();
+  for (const order of orders) {
+    if (order.productId && products.some(p => p.id === order.productId)) continue;
+    await upsertProductFromOrder(order);
+    await dbPut('orders', order);
+  }
+  products = await dbGetAll('products');
+}
+
 // ─── RENDER SETTINGS ─────────────────────────────────
 function renderSettings() {
   // nothing dynamic needed, all static
@@ -868,8 +1152,8 @@ function openEditForm() {
   
   refreshClientSelect(o.clientId || findClientByName(o.client)?.id || '');
   document.getElementById('f-phone').value = o.phone || findClientByName(o.client)?.phone || '';
-  document.getElementById('f-product').value = o.product || '';
-  document.getElementById('f-product-custom').value = PRODUCTS.includes(o.product) ? '' : o.product;
+  refreshProductSelect(o.productId || findProductByName(o.product)?.id || '');
+  syncProductFromSelect();
   document.getElementById('f-description').value = o.description || '';
   document.getElementById('f-status').value = o.status || 'idea';
   document.getElementById('f-priority').value = o.priority || 'Normal';
@@ -889,7 +1173,7 @@ function closeForm() {
 }
 
 function resetForm() {
-  ['f-phone','f-product','f-product-custom','f-description',
+  ['f-phone','f-description',
    'f-delivery','f-followup','f-price','f-paid','f-notes'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
@@ -899,6 +1183,8 @@ function resetForm() {
   document.getElementById('f-payment').value = 'no';
   const clientSelect = document.getElementById('f-client-select');
   if (clientSelect) clientSelect.value = '';
+  const productSelect = document.getElementById('f-product-select');
+  if (productSelect) productSelect.value = '';
   renderFormPhotos();
 }
 
@@ -906,12 +1192,12 @@ async function saveForm() {
   const selectedClientId = document.getElementById('f-client-select').value;
   const selectedClient = clients.find(c => c.id === selectedClientId);
   const client = selectedClient?.name || '';
-  const productSel = document.getElementById('f-product').value;
-  const productCustom = document.getElementById('f-product-custom').value.trim();
-  const product = productCustom || productSel;
+  const selectedProductId = document.getElementById('f-product-select').value;
+  const selectedProduct = products.find(p => p.id === selectedProductId);
+  const product = selectedProduct?.name || '';
 
   if (!selectedClient) { showToast('Selecciona o crea un cliente'); return; }
-  if (!product) { showToast('Selecciona o escribe un producto'); return; }
+  if (!selectedProduct) { showToast('Selecciona o crea un producto'); return; }
 
   const now = Date.now();
   const isEdit = !!editingOrderId;
@@ -922,7 +1208,8 @@ async function saveForm() {
     clientId: selectedClient.id,
     client: selectedClient.name,
     phone: selectedClient.phone || document.getElementById('f-phone').value.trim(),
-    product,
+    productId: selectedProduct.id,
+    product: selectedProduct.name,
     description: document.getElementById('f-description').value.trim(),
     status: document.getElementById('f-status').value,
     priority: document.getElementById('f-priority').value,
@@ -943,6 +1230,7 @@ async function saveForm() {
 
 normalizePaymentStatus(order);
 await upsertClientFromOrder(order);
+await upsertProductFromOrder(order);
 
   if (isEdit) {
     addHistoryEntry(order, 'Pedido editado');
@@ -1054,7 +1342,7 @@ function closeModal(id) {
 
 // ─── SETTINGS ────────────────────────────────────────
 async function exportBackup() {
-  const data = { version: 2, exportedAt: new Date().toISOString(), orders, clients };
+  const data = { version: 3, exportedAt: new Date().toISOString(), orders, clients, products };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1077,15 +1365,21 @@ function importBackup() {
       if (!data.orders || !Array.isArray(data.orders)) throw new Error('Formato incorrecto');
       await dbClear('orders');
       await dbClear('clients');
+      await dbClear('products');
       orders = data.orders;
       clients = Array.isArray(data.clients) ? data.clients : [];
+      products = Array.isArray(data.products) ? data.products : [];
       for (const c of clients) await dbPut('clients', c);
+      for (const p of products) await dbPut('products', p);
       for (const o of orders) {
         await upsertClientFromOrder(o);
+        await upsertProductFromOrder(o);
         await dbPut('orders', o);
       }
       clients = await dbGetAll('clients');
+      products = await dbGetAll('products');
       refreshClientSelect();
+      refreshProductSelect();
       showToast('Copia importada ✓ — ' + orders.length + ' pedidos');
       showView(currentView);
     } catch {
@@ -1100,9 +1394,12 @@ async function clearAllData() {
   if (confirmed !== 'BORRAR') { showToast('Cancelado'); return; }
   await dbClear('orders');
   await dbClear('clients');
+  await dbClear('products');
   orders = [];
   clients = [];
+  products = [];
   refreshClientSelect();
+  refreshProductSelect();
   showToast('Todos los datos eliminados');
   showView('dashboard');
 }
@@ -1132,9 +1429,12 @@ async function init() {
 
   orders = await dbGetAll('orders');
   clients = await dbGetAll('clients');
+  products = await dbGetAll('products');
 
   await migrateOrdersToClients();
+  await migrateOrdersToProducts();
   refreshClientSelect();
+  refreshProductSelect();
   showView('dashboard');
 
   // Register SW
@@ -1151,10 +1451,19 @@ async function init() {
   const clientSelect = document.getElementById('f-client-select');
   if (clientSelect) clientSelect.addEventListener('change', syncClientFromSelect);
 
+  const productSelect = document.getElementById('f-product-select');
+  if (productSelect) productSelect.addEventListener('change', syncProductFromSelect);
+
   const clientSearchInput = document.getElementById('client-search');
   if (clientSearchInput) clientSearchInput.addEventListener('input', e => {
     clientSearch = e.target.value;
     renderClients();
+  });
+
+  const productSearchInput = document.getElementById('product-search');
+  if (productSearchInput) productSearchInput.addEventListener('input', e => {
+    productSearch = e.target.value;
+    renderProducts();
   });
 }
 document.addEventListener('DOMContentLoaded', init);
