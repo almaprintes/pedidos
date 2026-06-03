@@ -294,8 +294,10 @@
       <div class="form-section-title">Cliente</div>
       <div class="form-field">
         <label class="form-label">Nombre del cliente *</label>
-<input class="form-input" id="f-client" type="text" placeholder="Ej: María López" autocomplete="off" list="client-suggestions">
-<datalist id="client-suggestions"></datalist>
+<div class="client-autocomplete-wrap">
+  <input class="form-input" id="f-client" type="text" placeholder="Ej: María López" autocomplete="off">
+  <div id="client-autocomplete" class="client-autocomplete"></div>
+</div>
       </div>
       <div class="form-field">
         <label class="form-label">Teléfono / WhatsApp</label>
