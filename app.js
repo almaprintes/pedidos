@@ -237,6 +237,58 @@ function refreshClientSuggestions() {
     .map(c => `<option value="${escHtml(c.name)}">${escHtml(c.phone || '')}</option>`)
     .join('');
 }
+function renderClientAutocomplete() {
+  const clientInput = document.getElementById('f-client');
+  const box = document.getElementById('client-autocomplete');
+  if (!clientInput || !box) return;
+
+  const q = normalizeClientName(clientInput.value);
+
+  if (!q) {
+    box.classList.remove('active');
+    box.innerHTML = '';
+    return;
+  }
+
+  const matches = clients
+    .filter(c => c.normalizedName.includes(q))
+    .sort((a, b) => a.name.localeCompare(b.name, 'es'))
+    .slice(0, 8);
+
+  if (!matches.length) {
+    box.classList.remove('active');
+    box.innerHTML = '';
+    return;
+  }
+
+  box.innerHTML = matches.map(c => `
+    <div class="client-autocomplete-item" onclick="selectClientFromAutocomplete('${c.id}')">
+      <div class="client-autocomplete-name">${escHtml(c.name)}</div>
+      ${c.phone ? `<div class="client-autocomplete-phone">${escHtml(c.phone)}</div>` : ''}
+    </div>
+  `).join('');
+
+  box.classList.add('active');
+}
+
+function selectClientFromAutocomplete(clientId) {
+  const client = clients.find(c => c.id === clientId);
+  if (!client) return;
+
+  const clientInput = document.getElementById('f-client');
+  const phoneInput = document.getElementById('f-phone');
+  const box = document.getElementById('client-autocomplete');
+
+  clientInput.value = client.name;
+
+  if (client.phone) {
+    phoneInput.value = client.phone;
+  }
+
+  box.classList.remove('active');
+  box.innerHTML = '';
+}
+
 function autofillClientData() {
   const clientInput = document.getElementById('f-client');
   const phoneInput = document.getElementById('f-phone');
@@ -249,6 +301,12 @@ function autofillClientData() {
 
   if (client.phone && !phoneInput.value.trim()) {
     phoneInput.value = client.phone;
+  }
+
+  const box = document.getElementById('client-autocomplete');
+  if (box) {
+    box.classList.remove('active');
+    box.innerHTML = '';
   }
 }
 function getSetting(key, def = '') {
@@ -884,8 +942,12 @@ showView('dashboard');
     listSearch = e.target.value;
     renderList();
   });
-document.getElementById('f-client').addEventListener('change', autofillClientData);
-document.getElementById('f-client').addEventListener('blur', autofillClientData);
-}
+const clientInput = document.getElementById('f-client');
+
+clientInput.addEventListener('input', renderClientAutocomplete);
+clientInput.addEventListener('change', autofillClientData);
+clientInput.addEventListener('blur', () => {
+  setTimeout(autofillClientData, 150);
+});}
 
 document.addEventListener('DOMContentLoaded', init);
