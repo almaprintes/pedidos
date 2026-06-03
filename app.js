@@ -5,7 +5,7 @@
 
 // ─── DB ──────────────────────────────────────────────
 const DB_NAME = 'almaprint_db';
-const DB_VER  = 2;
+const DB_VER  = 3;
 let db;
 
 function openDB() {
@@ -107,6 +107,10 @@ const DEFAULT_WA_MSG = 'Hola {cliente}, soy Juan de AlmaPrint. Te escribo para r
 // ─── STATE ───────────────────────────────────────────
 let orders = [];
 let clients = [];
+let currentClient = null;
+let editingClientId = null;
+let clientSearch = '';
+let orderFormReturnAfterClient = false;
 let currentView = 'dashboard';
 let currentOrder = null;
 let editingOrderId = null;
@@ -228,15 +232,28 @@ async function upsertClientFromOrder(order) {
 
   return order;
 }
-function refreshClientSuggestions() {
-  const list = document.getElementById('client-suggestions');
-  if (!list) return;
+function refreshClientSelect(selectedId = '') {
+  const select = document.getElementById('f-client-select');
+  if (!select) return;
 
-  list.innerHTML = clients
-    .sort((a, b) => a.name.localeCompare(b.name, 'es'))
-    .map(c => `<option value="${escHtml(c.name)}">${escHtml(c.phone || '')}</option>`)
-    .join('');
+  const sorted = [...clients].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  select.innerHTML = '<option value="">— Selecciona cliente —</option>' + sorted.map(c =>
+    `<option value="${escHtml(c.id)}">${escHtml(c.name)}${c.phone ? ' · ' + escHtml(c.phone) : ''}</option>`
+  ).join('');
+
+  if (selectedId) select.value = selectedId;
 }
+
+function syncClientFromSelect() {
+  const select = document.getElementById('f-client-select');
+  const phoneInput = document.getElementById('f-phone');
+  if (!select || !phoneInput) return null;
+
+  const client = clients.find(c => c.id === select.value) || null;
+  if (client) phoneInput.value = client.phone || '';
+  return client;
+}
+
 function renderClientAutocomplete() {
   const clientInput = document.getElementById('f-client');
   const box = document.getElementById('client-autocomplete');
@@ -328,6 +345,7 @@ function showView(viewId) {
   if (viewId === 'dashboard') renderDashboard();
   if (viewId === 'kanban') renderKanban();
   if (viewId === 'list') renderList();
+  if (viewId === 'clients') renderClients();
   if (viewId === 'seguimiento') renderSeguimiento();
   if (viewId === 'settings') renderSettings();
 }
@@ -476,6 +494,179 @@ function renderSeguimiento() {
       </button>` : ''}
     </div>
   `).join('');
+}
+
+
+// ─── RENDER CLIENTS ───────────────────────────────────
+function renderClients() {
+  const input = document.getElementById('client-search');
+  const list = document.getElementById('client-list');
+  const countEl = document.getElementById('client-count');
+  if (!list) return;
+
+  const q = normalizeClientName(clientSearch);
+  let filtered = [...clients];
+  if (q) {
+    filtered = filtered.filter(c =>
+      c.normalizedName.includes(q) ||
+      String(c.phone || '').replace(/\D/g, '').includes(q.replace(/\D/g, ''))
+    );
+  }
+
+  filtered.sort((a, b) => (b.lastOrderAt || b.updatedAt || 0) - (a.lastOrderAt || a.updatedAt || 0));
+  if (countEl) countEl.textContent = `${filtered.length} cliente${filtered.length !== 1 ? 's' : ''}`;
+  if (input && input.value !== clientSearch) input.value = clientSearch;
+
+  list.innerHTML = filtered.length
+    ? filtered.map(clientListCard).join('')
+    : '<div class="empty-state"><div class="empty-icon">👤</div><div class="empty-title">Sin clientes</div><div class="empty-desc">Crea tu primer cliente para asociarle pedidos</div></div>';
+}
+
+function clientListCard(c) {
+  const clientOrders = orders.filter(o => o.clientId === c.id || normalizeClientName(o.client) === c.normalizedName);
+  const total = clientOrders.reduce((sum, o) => sum + toNumber(o.paid || o.price), 0);
+  const last = c.lastOrderAt ? fmtDate(c.lastOrderAt) : 'Sin pedidos';
+  return `<div class="client-card" onclick="openClientDetail('${c.id}')">
+    <div class="client-avatar">${initials(c.name)}</div>
+    <div class="client-card-body">
+      <div class="client-card-name">${escHtml(c.name)}</div>
+      <div class="client-card-phone">${c.phone ? '📱 ' + escHtml(c.phone) : 'Sin teléfono'}</div>
+      <div class="client-card-meta">${clientOrders.length} pedido${clientOrders.length !== 1 ? 's' : ''} · ${total.toFixed(2).replace('.', ',')} € · ${last}</div>
+    </div>
+    <span class="settings-item-arrow">›</span>
+  </div>`;
+}
+
+function openClientDetail(id) {
+  currentClient = clients.find(c => c.id === id);
+  if (!currentClient) return;
+  renderClientDetail();
+  document.getElementById('client-detail-view').classList.add('active');
+}
+
+function closeClientDetail() {
+  document.getElementById('client-detail-view').classList.remove('active');
+}
+
+function renderClientDetail() {
+  const c = currentClient;
+  const body = document.getElementById('client-detail-body');
+  const title = document.getElementById('client-detail-title');
+  if (!c || !body || !title) return;
+  title.textContent = c.name;
+  const clientOrders = orders
+    .filter(o => o.clientId === c.id || normalizeClientName(o.client) === c.normalizedName)
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const total = clientOrders.reduce((sum, o) => sum + toNumber(o.paid || o.price), 0);
+  body.innerHTML = `
+    <div class="client-summary-card">
+      <div class="client-summary-name">${escHtml(c.name)}</div>
+      <div class="client-summary-phone">${c.phone ? '📱 ' + escHtml(c.phone) : 'Sin teléfono'}</div>
+      ${c.notes ? `<div class="client-summary-notes">${escHtml(c.notes)}</div>` : ''}
+      <div class="client-summary-stats">
+        <div><strong>${clientOrders.length}</strong><span>Pedidos</span></div>
+        <div><strong>${total.toFixed(2).replace('.', ',')} €</strong><span>Total</span></div>
+      </div>
+      <div class="client-summary-actions">
+        ${c.phone ? `<button class="modal-btn modal-btn-primary" onclick="sendWhatsAppToClient('${c.id}')">WhatsApp</button>` : ''}
+        ${c.phone ? `<button class="modal-btn modal-btn-secondary" onclick="location.href='tel:${escHtml(c.phone)}'">Llamar</button>` : ''}
+        <button class="modal-btn modal-btn-secondary" onclick="openEditClientForm('${c.id}')">Editar</button>
+      </div>
+    </div>
+    <div class="section-title">Pedidos del cliente</div>
+    <div class="order-list">
+      ${clientOrders.length ? clientOrders.map(orderListCard).join('') : '<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">Sin pedidos</div></div>'}
+    </div>`;
+}
+
+function sendWhatsAppToClient(id) {
+  const c = clients.find(x => x.id === id);
+  if (!c || !c.phone) { showToast('Sin teléfono'); return; }
+  const msg = `Hola ${c.name}, soy Juan de AlmaPrint.`;
+  const phone = c.phone.replace(/\D/g, '');
+  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+function openNewClientForm(returnToOrderForm = false) {
+  editingClientId = null;
+  orderFormReturnAfterClient = !!returnToOrderForm;
+  document.getElementById('client-form-title').textContent = 'Nuevo cliente';
+  document.getElementById('cf-name').value = '';
+  document.getElementById('cf-phone').value = '';
+  document.getElementById('cf-notes').value = '';
+  document.getElementById('client-form-view').classList.add('active');
+}
+
+function openEditClientForm(id) {
+  const c = clients.find(x => x.id === id) || currentClient;
+  if (!c) return;
+  editingClientId = c.id;
+  orderFormReturnAfterClient = false;
+  document.getElementById('client-form-title').textContent = 'Editar cliente';
+  document.getElementById('cf-name').value = c.name || '';
+  document.getElementById('cf-phone').value = c.phone || '';
+  document.getElementById('cf-notes').value = c.notes || '';
+  document.getElementById('client-form-view').classList.add('active');
+}
+
+function closeClientForm() {
+  document.getElementById('client-form-view').classList.remove('active');
+}
+
+async function saveClientForm() {
+  const name = document.getElementById('cf-name').value.trim();
+  const phone = document.getElementById('cf-phone').value.trim();
+  const notes = document.getElementById('cf-notes').value.trim();
+  if (!name) { showToast('Escribe el nombre del cliente'); return; }
+
+  const normalizedName = normalizeClientName(name);
+  const now = Date.now();
+  let existing = clients.find(c => c.normalizedName === normalizedName && c.id !== editingClientId);
+
+  if (existing) {
+    existing.phone = phone || existing.phone || '';
+    existing.notes = notes || existing.notes || '';
+    existing.updatedAt = now;
+    await dbPut('clients', existing);
+    clients = clients.map(c => c.id === existing.id ? existing : c);
+    refreshClientSelect(existing.id);
+    showToast('Cliente ya existía, actualizado');
+    if (orderFormReturnAfterClient) syncClientFromSelect();
+    closeClientForm();
+    renderClients();
+    return;
+  }
+
+  let client = editingClientId ? clients.find(c => c.id === editingClientId) : null;
+  if (client) {
+    client.name = name;
+    client.normalizedName = normalizedName;
+    client.phone = phone;
+    client.notes = notes;
+    client.updatedAt = now;
+  } else {
+    client = { id: uid(), name, normalizedName, phone, notes, createdAt: now, updatedAt: now, lastOrderAt: null };
+  }
+
+  await dbPut('clients', client);
+  if (editingClientId) clients = clients.map(c => c.id === client.id ? client : c);
+  else clients.push(client);
+
+  refreshClientSelect(client.id);
+  if (orderFormReturnAfterClient) syncClientFromSelect();
+  closeClientForm();
+  showToast(editingClientId ? 'Cliente actualizado' : 'Cliente creado ✓');
+  renderClients();
+  if (currentClient?.id === client.id) { currentClient = client; renderClientDetail(); }
+}
+
+async function migrateOrdersToClients() {
+  for (const order of orders) {
+    if (order.clientId && clients.some(c => c.id === order.clientId)) continue;
+    await upsertClientFromOrder(order);
+    await dbPut('orders', order);
+  }
+  clients = await dbGetAll('clients');
 }
 
 // ─── RENDER SETTINGS ─────────────────────────────────
@@ -662,6 +853,7 @@ function showWAModal(o, msg) {
 function openNewForm() {
   editingOrderId = null;
   formPhotos = [];
+  refreshClientSelect();
   document.getElementById('form-title').textContent = 'Nuevo pedido';
   resetForm();
   document.getElementById('form-view').classList.add('active');
@@ -674,8 +866,8 @@ function openEditForm() {
   formPhotos = o.photos ? [...o.photos] : [];
   document.getElementById('form-title').textContent = 'Editar pedido';
   
-  document.getElementById('f-client').value = o.client || '';
-  document.getElementById('f-phone').value = o.phone || '';
+  refreshClientSelect(o.clientId || findClientByName(o.client)?.id || '');
+  document.getElementById('f-phone').value = o.phone || findClientByName(o.client)?.phone || '';
   document.getElementById('f-product').value = o.product || '';
   document.getElementById('f-product-custom').value = PRODUCTS.includes(o.product) ? '' : o.product;
   document.getElementById('f-description').value = o.description || '';
@@ -697,7 +889,7 @@ function closeForm() {
 }
 
 function resetForm() {
-  ['f-client','f-phone','f-product','f-product-custom','f-description',
+  ['f-phone','f-product','f-product-custom','f-description',
    'f-delivery','f-followup','f-price','f-paid','f-notes'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
@@ -705,80 +897,73 @@ function resetForm() {
   document.getElementById('f-status').value = 'idea';
   document.getElementById('f-priority').value = 'Normal';
   document.getElementById('f-payment').value = 'no';
+  const clientSelect = document.getElementById('f-client-select');
+  if (clientSelect) clientSelect.value = '';
   renderFormPhotos();
 }
 
 async function saveForm() {
-  try {
-    const client = document.getElementById('f-client').value.trim();
-    const productSel = document.getElementById('f-product').value;
-    const productCustom = document.getElementById('f-product-custom').value.trim();
-    const product = productCustom || productSel;
+  const selectedClientId = document.getElementById('f-client-select').value;
+  const selectedClient = clients.find(c => c.id === selectedClientId);
+  const client = selectedClient?.name || '';
+  const productSel = document.getElementById('f-product').value;
+  const productCustom = document.getElementById('f-product-custom').value.trim();
+  const product = productCustom || productSel;
 
-    if (!client) { showToast('Escribe el nombre del cliente'); return; }
-    if (!product) { showToast('Selecciona o escribe un producto'); return; }
+  if (!selectedClient) { showToast('Selecciona o crea un cliente'); return; }
+  if (!product) { showToast('Selecciona o escribe un producto'); return; }
 
-    const now = Date.now();
-    const isEdit = !!editingOrderId;
-    const existing = isEdit ? orders.find(o => o.id === editingOrderId) : null;
+  const now = Date.now();
+  const isEdit = !!editingOrderId;
+  const existing = isEdit ? orders.find(o => o.id === editingOrderId) : null;
 
-    const order = {
-      id: isEdit ? editingOrderId : uid(),
-      client,
-      clientId: existing?.clientId || null,
-      phone: document.getElementById('f-phone').value.trim(),
-      product,
-      description: document.getElementById('f-description').value.trim(),
-      status: document.getElementById('f-status').value,
-      priority: document.getElementById('f-priority').value,
-      deliveryDate: document.getElementById('f-delivery').value || null,
-      followup: document.getElementById('f-followup').value || null,
-      payment: document.getElementById('f-payment').value,
-      price: document.getElementById('f-price').value || null,
-      paid: document.getElementById('f-paid').value || null,
-      notes: document.getElementById('f-notes').value.trim(),
-      photos: formPhotos,
-      tasks: existing?.tasks || DEFAULT_TASKS.map(l => ({ label: l, done: false })),
-      quickNotes: existing?.quickNotes || [],
-      history: existing?.history || [],
-      favorite: existing?.favorite || false,
-      createdAt: existing?.createdAt || now,
-      updatedAt: now,
-    };
+  const order = {
+    id: isEdit ? editingOrderId : uid(),
+    clientId: selectedClient.id,
+    client: selectedClient.name,
+    phone: selectedClient.phone || document.getElementById('f-phone').value.trim(),
+    product,
+    description: document.getElementById('f-description').value.trim(),
+    status: document.getElementById('f-status').value,
+    priority: document.getElementById('f-priority').value,
+    deliveryDate: document.getElementById('f-delivery').value || null,
+    followup: document.getElementById('f-followup').value || null,
+    payment: document.getElementById('f-payment').value,
+    price: document.getElementById('f-price').value || null,
+    paid: document.getElementById('f-paid').value || null,
+    notes: document.getElementById('f-notes').value.trim(),
+    photos: formPhotos,
+    tasks: existing?.tasks || DEFAULT_TASKS.map(l => ({ label: l, done: false })),
+    quickNotes: existing?.quickNotes || [],
+    history: existing?.history || [],
+    favorite: existing?.favorite || false,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+  };
 
-    normalizePaymentStatus(order);
-    await upsertClientFromOrder(order);
+normalizePaymentStatus(order);
+await upsertClientFromOrder(order);
 
-    if (isEdit) {
-      addHistoryEntry(order, 'Pedido editado');
-    } else {
-      addHistoryEntry(order, 'Pedido creado');
-    }
+  if (isEdit) {
+    addHistoryEntry(order, 'Pedido editado');
+  } else {
+    addHistoryEntry(order, 'Pedido creado');
+  }
 
-    await dbPut('orders', order);
+  await dbPut('orders', order);
+  if (isEdit) {
+    orders = orders.map(o => o.id === order.id ? order : o);
+    currentOrder = order;
+  } else {
+    orders.push(order);
+  }
 
-    if (isEdit) {
-      orders = orders.map(o => o.id === order.id ? order : o);
-      currentOrder = order;
-    } else {
-      orders.push(order);
-    }
-
-    clients = await dbGetAll('clients');
-    refreshClientSuggestions();
-
-    closeForm();
-    showToast(isEdit ? 'Pedido actualizado' : 'Pedido creado ✓');
-
-    if (isEdit) {
-      renderDetailView();
-      showView(currentView);
-    } else {
-      showView(currentView);
-    }
-  } catch (err) {
-    console.error('Error al guardar pedido:', err);
-    showToast('Error al guardar. Recarga la app.');
+  closeForm();
+  showToast(isEdit ? 'Pedido actualizado' : 'Pedido creado ✓');
+  if (isEdit) {
+    renderDetailView();
+  } else {
+    showView(currentView);
   }
 }
 
@@ -892,20 +1077,15 @@ function importBackup() {
       if (!data.orders || !Array.isArray(data.orders)) throw new Error('Formato incorrecto');
       await dbClear('orders');
       await dbClear('clients');
-
       orders = data.orders;
       clients = Array.isArray(data.clients) ? data.clients : [];
-
       for (const c of clients) await dbPut('clients', c);
-
       for (const o of orders) {
-        normalizePaymentStatus(o);
         await upsertClientFromOrder(o);
         await dbPut('orders', o);
       }
-
       clients = await dbGetAll('clients');
-      refreshClientSuggestions();
+      refreshClientSelect();
       showToast('Copia importada ✓ — ' + orders.length + ' pedidos');
       showView(currentView);
     } catch {
@@ -922,6 +1102,7 @@ async function clearAllData() {
   await dbClear('clients');
   orders = [];
   clients = [];
+  refreshClientSelect();
   showToast('Todos los datos eliminados');
   showView('dashboard');
 }
@@ -952,14 +1133,8 @@ async function init() {
   orders = await dbGetAll('orders');
   clients = await dbGetAll('clients');
 
-  for (const order of orders) {
-    await upsertClientFromOrder(order);
-    await dbPut('orders', order);
-  }
-
-  clients = await dbGetAll('clients');
-
-  refreshClientSuggestions();
+  await migrateOrdersToClients();
+  refreshClientSelect();
   showView('dashboard');
 
   // Register SW
@@ -973,12 +1148,13 @@ async function init() {
     renderList();
   });
 
-  const clientInput = document.getElementById('f-client');
+  const clientSelect = document.getElementById('f-client-select');
+  if (clientSelect) clientSelect.addEventListener('change', syncClientFromSelect);
 
-  clientInput.addEventListener('input', renderClientAutocomplete);
-  clientInput.addEventListener('change', autofillClientData);
-  clientInput.addEventListener('blur', () => {
-    setTimeout(autofillClientData, 150);
+  const clientSearchInput = document.getElementById('client-search');
+  if (clientSearchInput) clientSearchInput.addEventListener('input', e => {
+    clientSearch = e.target.value;
+    renderClients();
   });
 }
 document.addEventListener('DOMContentLoaded', init);

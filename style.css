@@ -811,20 +811,51 @@ h3 { font-size: 1rem; font-weight: 600; }
   font-size: 0.8rem;
   color: #c9c9d4;
 }
-.client-autocomplete {
-  background: #1C1C26 !important;
-  border: 1px solid #2A2A38 !important;
-}
 
-.client-autocomplete-item {
-  background: #1C1C26 !important;
-  color: #F0F0F5 !important;
-}
 
-.client-autocomplete-name {
-  color: #F0F0F5 !important;
+/* ===== CLIENTES ===== */
+.client-list { display: flex; flex-direction: column; gap: 10px; }
+.client-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-
-.client-autocomplete-phone {
-  color: #9CA3AF !important;
+.client-avatar {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--pink), var(--purple));
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  flex-shrink: 0;
 }
+.client-card-body { flex: 1; min-width: 0; }
+.client-card-name { font-weight: 700; font-size: 0.95rem; }
+.client-card-phone { font-size: 0.8rem; color: var(--text-2); margin-top: 2px; }
+.client-card-meta { font-size: 0.72rem; color: var(--text-2); margin-top: 4px; }
+.client-summary-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+  margin-bottom: 16px;
+}
+.client-summary-name { font-family: var(--font-display); font-size: 1.25rem; font-weight: 700; }
+.client-summary-phone, .client-summary-notes { color: var(--text-2); margin-top: 6px; font-size: 0.9rem; }
+.client-summary-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.client-summary-stats div { background: var(--bg); border-radius: var(--radius-sm); padding: 12px; }
+.client-summary-stats strong { display: block; font-size: 1.1rem; color: var(--text); }
+.client-summary-stats span { font-size: 0.72rem; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.05em; }
+.client-summary-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+.client-summary-actions .modal-btn { text-align: center; }
+.bottom-nav .nav-item { padding: 0 6px; font-size: 0.62rem; }
+.bottom-nav .nav-item svg { width: 21px; height: 21px; }

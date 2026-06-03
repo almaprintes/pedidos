@@ -1,12 +1,9 @@
-const CACHE_NAME = 'almaprint-v1.3-clientes-fix';
+const CACHE_NAME = 'almaprint-pedidos-v12-clientes';
 const ASSETS = [
-  './',
   './index.html',
   './style.css',
   './app.js',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png'
+  './manifest.json'
 ];
 
 self.addEventListener('install', e => {
@@ -26,15 +23,7 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-
   e.respondWith(
-    fetch(e.request)
-      .then(response => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
-        return response;
-      })
-      .catch(() => caches.match(e.request))
+    caches.match(e.request).then(cached => cached || fetch(e.request))
   );
 });
