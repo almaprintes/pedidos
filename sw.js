@@ -1,4 +1,4 @@
-const CACHE_NAME = 'almaprint-pedidos-v13-productos';
+const CACHE_NAME = 'almaprint-pedidos-v14-stats';
 const ASSETS = [
   './',
   './index.html',

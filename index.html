@@ -203,8 +203,19 @@
   <div id="product-list" class="client-list"></div>
 </section>
 
+
 <!-- ═══════════════════════════════════════════
-     VIEW 7: AJUSTES
+     VIEW 7: ESTADÍSTICAS
+═══════════════════════════════════════════ -->
+<section id="view-stats" class="view">
+  <div class="view-header">
+    <h1>Estadísticas</h1>
+  </div>
+  <div id="stats-content"></div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     VIEW 8: AJUSTES
 ═══════════════════════════════════════════ -->
 <section id="view-settings" class="view">
   <div class="view-header">
@@ -278,7 +289,7 @@
         </div>
         <div class="settings-item-body">
           <div class="settings-item-title">AlmaPrint Pedidos</div>
-          <div class="settings-item-desc">Versión 1.0 — Tenerife 🌋</div>
+          <div class="settings-item-desc">Versión 1.4 — Estadísticas 🌋</div>
         </div>
       </div>
     </div>
@@ -316,6 +327,10 @@
   <button class="nav-item" data-nav="products" onclick="showView('products')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
     Productos
+  </button>
+  <button class="nav-item" data-nav="stats" onclick="showView('stats')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    Stats
   </button>
   <button class="nav-item" data-nav="seguimiento" onclick="showView('seguimiento')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>

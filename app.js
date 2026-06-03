@@ -128,6 +128,7 @@ let editingClientId = null;
 let editingProductId = null;
 let clientSearch = '';
 let productSearch = '';
+let statsRange = 'all';
 let orderFormReturnAfterClient = false;
 let orderFormReturnAfterProduct = false;
 let currentView = 'dashboard';
@@ -366,6 +367,7 @@ function showView(viewId) {
   if (viewId === 'list') renderList();
   if (viewId === 'clients') renderClients();
   if (viewId === 'products') renderProducts();
+  if (viewId === 'stats') renderStats();
   if (viewId === 'seguimiento') renderSeguimiento();
   if (viewId === 'settings') renderSettings();
 }
@@ -951,6 +953,218 @@ async function migrateOrdersToProducts() {
     await dbPut('orders', order);
   }
   products = await dbGetAll('products');
+}
+
+
+// ─── RENDER STATS ────────────────────────────────────
+function getSalesOrders() {
+  return orders.filter(o => o.status !== 'idea' && o.status !== 'seguimiento');
+}
+
+function getOrderDateValue(order) {
+  return order.createdAt || Date.parse(order.deliveryDate || '') || 0;
+}
+
+function isOrderInStatsRange(order) {
+  if (statsRange === 'all') return true;
+  const t = getOrderDateValue(order);
+  if (!t) return false;
+  const d = new Date(t);
+  const now = new Date();
+
+  if (statsRange === 'month') {
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }
+
+  if (statsRange === 'year') {
+    return d.getFullYear() === now.getFullYear();
+  }
+
+  if (statsRange === '30') {
+    const limit = new Date();
+    limit.setDate(limit.getDate() - 30);
+    return d >= limit;
+  }
+
+  return true;
+}
+
+function formatMoney(value) {
+  return `${toNumber(value).toFixed(2).replace('.', ',')} €`;
+}
+
+function getClientNameById(id, fallback = '') {
+  return clients.find(c => c.id === id)?.name || fallback || 'Sin cliente';
+}
+
+function getProductNameById(id, fallback = '') {
+  return products.find(p => p.id === id)?.name || fallback || 'Sin producto';
+}
+
+function buildRanking(filteredOrders, type = 'client') {
+  const map = new Map();
+
+  filteredOrders.forEach(o => {
+    const id = type === 'client' ? (o.clientId || normalizeClientName(o.client)) : (o.productId || normalizeProductName(o.product));
+    const name = type === 'client' ? getClientNameById(o.clientId, o.client) : getProductNameById(o.productId, o.product);
+    if (!id) return;
+
+    if (!map.has(id)) {
+      map.set(id, { id, name, count: 0, invoiced: 0, paid: 0, pending: 0 });
+    }
+
+    const row = map.get(id);
+    const price = toNumber(o.price);
+    const paid = toNumber(o.paid);
+    row.count += 1;
+    row.invoiced += price;
+    row.paid += paid;
+    row.pending += Math.max(price - paid, 0);
+  });
+
+  return [...map.values()];
+}
+
+function rankingRow(row, type = 'client', mode = 'invoiced') {
+  const amount = mode === 'count' ? `${row.count} pedido${row.count !== 1 ? 's' : ''}` : formatMoney(row.invoiced);
+  const sub = mode === 'count' ? formatMoney(row.invoiced) : `${row.count} pedido${row.count !== 1 ? 's' : ''}`;
+  const click = type === 'client' && clients.some(c => c.id === row.id)
+    ? `onclick="openClientDetail('${row.id}')"`
+    : type === 'product' && products.some(p => p.id === row.id)
+      ? `onclick="openProductDetail('${row.id}')"`
+      : '';
+
+  return `<div class="stats-ranking-row" ${click}>
+    <div class="stats-ranking-main">
+      <div class="stats-ranking-name">${escHtml(row.name)}</div>
+      <div class="stats-ranking-sub">${sub} · Cobrado ${formatMoney(row.paid)}</div>
+    </div>
+    <div class="stats-ranking-value">${amount}</div>
+  </div>`;
+}
+
+function renderMonthlyEvolution(filteredOrders) {
+  const months = [];
+  const now = new Date();
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ key: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`, label: d.toLocaleDateString('es-ES', { month: 'short' }), total: 0 });
+  }
+
+  filteredOrders.forEach(o => {
+    const t = getOrderDateValue(o);
+    if (!t) return;
+    const d = new Date(t);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const row = months.find(m => m.key === key);
+    if (row) row.total += toNumber(o.price);
+  });
+
+  const max = Math.max(...months.map(m => m.total), 1);
+  return months.map(m => {
+    const w = Math.max(4, Math.round((m.total / max) * 100));
+    return `<div class="stats-month-row">
+      <div class="stats-month-label">${escHtml(m.label)}</div>
+      <div class="stats-month-bar-wrap"><div class="stats-month-bar" style="width:${w}%"></div></div>
+      <div class="stats-month-value">${formatMoney(m.total)}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderPendingPayments(filteredOrders) {
+  const pending = filteredOrders
+    .map(o => ({ ...o, pendingAmount: Math.max(toNumber(o.price) - toNumber(o.paid), 0) }))
+    .filter(o => o.pendingAmount > 0)
+    .sort((a, b) => b.pendingAmount - a.pendingAmount)
+    .slice(0, 10);
+
+  if (!pending.length) {
+    return '<div class="empty-state compact"><div class="empty-icon">✅</div><div class="empty-title">Sin cobros pendientes</div></div>';
+  }
+
+  return pending.map(o => `<div class="stats-ranking-row" onclick="openDetail('${o.id}')">
+    <div class="stats-ranking-main">
+      <div class="stats-ranking-name">${escHtml(o.client)}</div>
+      <div class="stats-ranking-sub">${escHtml(o.product)} · Cobrado ${formatMoney(o.paid)}</div>
+    </div>
+    <div class="stats-ranking-value danger">${formatMoney(o.pendingAmount)}</div>
+  </div>`).join('');
+}
+
+function setStatsRange(range) {
+  statsRange = range;
+  document.querySelectorAll('.stats-chip').forEach(c => c.classList.toggle('active', c.dataset.range === range));
+  renderStats();
+}
+
+function renderStats() {
+  const root = document.getElementById('stats-content');
+  if (!root) return;
+
+  const filtered = getSalesOrders().filter(isOrderInStatsRange);
+  const invoiced = filtered.reduce((sum, o) => sum + toNumber(o.price), 0);
+  const paid = filtered.reduce((sum, o) => sum + toNumber(o.paid), 0);
+  const pending = filtered.reduce((sum, o) => sum + Math.max(toNumber(o.price) - toNumber(o.paid), 0), 0);
+  const avgTicket = filtered.length ? invoiced / filtered.length : 0;
+  const delivered = filtered.filter(o => o.status === 'entregado').length;
+  const paidPct = invoiced > 0 ? Math.round((paid / invoiced) * 100) : 0;
+
+  const clientsByMoney = buildRanking(filtered, 'client').sort((a,b) => b.invoiced - a.invoiced).slice(0, 10);
+  const clientsByCount = buildRanking(filtered, 'client').sort((a,b) => b.count - a.count || b.invoiced - a.invoiced).slice(0, 10);
+  const productsByMoney = buildRanking(filtered, 'product').sort((a,b) => b.invoiced - a.invoiced).slice(0, 10);
+  const productsByCount = buildRanking(filtered, 'product').sort((a,b) => b.count - a.count || b.invoiced - a.invoiced).slice(0, 10);
+
+  const topClient = clientsByMoney[0]?.name || 'Todavía no hay datos';
+  const topProduct = productsByCount[0]?.name || 'Todavía no hay datos';
+
+  root.innerHTML = `
+    <div class="stats-filter-scroll">
+      <button class="stats-chip ${statsRange === 'all' ? 'active' : ''}" data-range="all" onclick="setStatsRange('all')">Todo</button>
+      <button class="stats-chip ${statsRange === 'month' ? 'active' : ''}" data-range="month" onclick="setStatsRange('month')">Este mes</button>
+      <button class="stats-chip ${statsRange === '30' ? 'active' : ''}" data-range="30" onclick="setStatsRange('30')">Últimos 30 días</button>
+      <button class="stats-chip ${statsRange === 'year' ? 'active' : ''}" data-range="year" onclick="setStatsRange('year')">Este año</button>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card accent-pink"><div class="stat-label">Facturado</div><div class="stat-number small">${formatMoney(invoiced)}</div></div>
+      <div class="stat-card accent-teal"><div class="stat-label">Cobrado</div><div class="stat-number small">${formatMoney(paid)}</div></div>
+      <div class="stat-card accent-amber"><div class="stat-label">Pendiente</div><div class="stat-number small">${formatMoney(pending)}</div></div>
+      <div class="stat-card accent-purple"><div class="stat-label">Ticket medio</div><div class="stat-number small">${formatMoney(avgTicket)}</div></div>
+    </div>
+
+    <div class="stats-insights">
+      <div><strong>${filtered.length}</strong><span>Pedidos</span></div>
+      <div><strong>${delivered}</strong><span>Entregados</span></div>
+      <div><strong>${paidPct}%</strong><span>Cobrado</span></div>
+    </div>
+
+    <div class="stats-card">
+      <div class="section-title">AlmaPrint Insights</div>
+      <div class="insight-line">🏆 Mejor cliente: <strong>${escHtml(topClient)}</strong></div>
+      <div class="insight-line">📦 Producto más vendido: <strong>${escHtml(topProduct)}</strong></div>
+      <div class="insight-line">💰 Pendiente de cobro: <strong>${formatMoney(pending)}</strong></div>
+    </div>
+
+    <div class="section-title">Top clientes por facturación</div>
+    <div class="stats-card">${clientsByMoney.length ? clientsByMoney.map(r => rankingRow(r, 'client', 'invoiced')).join('') : '<div class="empty-state compact"><div class="empty-title">Sin clientes todavía</div></div>'}</div>
+
+    <div class="section-title">Top clientes por pedidos</div>
+    <div class="stats-card">${clientsByCount.length ? clientsByCount.map(r => rankingRow(r, 'client', 'count')).join('') : '<div class="empty-state compact"><div class="empty-title">Sin clientes todavía</div></div>'}</div>
+
+    <div class="section-title">Productos más vendidos</div>
+    <div class="stats-card">${productsByCount.length ? productsByCount.map(r => rankingRow(r, 'product', 'count')).join('') : '<div class="empty-state compact"><div class="empty-title">Sin productos todavía</div></div>'}</div>
+
+    <div class="section-title">Productos por facturación</div>
+    <div class="stats-card">${productsByMoney.length ? productsByMoney.map(r => rankingRow(r, 'product', 'invoiced')).join('') : '<div class="empty-state compact"><div class="empty-title">Sin productos todavía</div></div>'}</div>
+
+    <div class="section-title">Pendiente de cobro</div>
+    <div class="stats-card">${renderPendingPayments(filtered)}</div>
+
+    <div class="section-title">Evolución mensual</div>
+    <div class="stats-card">${renderMonthlyEvolution(getSalesOrders())}</div>
+
+    <div style="height:16px"></div>
+  `;
 }
 
 // ─── RENDER SETTINGS ─────────────────────────────────
