@@ -767,6 +767,10 @@ h3 { font-size: 1rem; font-weight: 600; }
   position: relative;
 }
 
+.client-autocomplete-wrap {
+  position: relative;
+}
+
 .client-autocomplete {
   display: none;
   position: absolute;
@@ -774,10 +778,10 @@ h3 { font-size: 1rem; font-weight: 600; }
   top: calc(100% + 6px);
   left: 0;
   right: 0;
-  background: var(--surface, #fff);
-  border: 1px solid var(--border, #e5e7eb);
+  background: #15151c;
+  border: 1px solid rgba(255,255,255,0.12);
   border-radius: 14px;
-  box-shadow: 0 12px 30px rgba(0,0,0,0.14);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.35);
   overflow: hidden;
   max-height: 220px;
   overflow-y: auto;
@@ -789,7 +793,7 @@ h3 { font-size: 1rem; font-weight: 600; }
 
 .client-autocomplete-item {
   padding: 12px 14px;
-  border-bottom: 1px solid var(--border, #e5e7eb);
+  border-bottom: 1px solid rgba(255,255,255,0.10);
   cursor: pointer;
 }
 
@@ -799,11 +803,11 @@ h3 { font-size: 1rem; font-weight: 600; }
 
 .client-autocomplete-name {
   font-weight: 700;
-  color: var(--text, #111827);
+  color: #ffffff;
 }
 
 .client-autocomplete-phone {
   margin-top: 2px;
   font-size: 0.8rem;
-  color: var(--text-2, #6b7280);
+  color: #c9c9d4;
 }
