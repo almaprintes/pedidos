@@ -1012,3 +1012,84 @@ h3 { font-size: 1rem; font-weight: 600; }
   font-size: 0.58rem;
 }
 .nav-item svg { width: 20px; height: 20px; }
+
+
+/* ===== BUSINESS / NEGOCIO V1.5 ===== */
+.nav-compact .nav-item { padding: 0 8px; }
+.business-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin-bottom: 14px;
+  -webkit-overflow-scrolling: touch;
+}
+.business-tabs::-webkit-scrollbar { display: none; }
+.business-tab {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border-radius: 20px;
+  border: 1.5px solid var(--border);
+  background: var(--card);
+  color: var(--text-2);
+  font-family: var(--font-body);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+.business-tab.active { background: var(--pink); border-color: var(--pink); color: #fff; }
+.business-form-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+  margin-bottom: 16px;
+}
+.business-cash-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.business-cash-grid div {
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+.business-cash-grid span {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-2);
+  margin-bottom: 2px;
+}
+.business-cash-grid strong {
+  font-size: 1.05rem;
+  color: var(--text);
+}
+.business-cash-grid .profit {
+  grid-column: 1 / -1;
+  border-left: 4px solid var(--teal);
+}
+.stats-ranking-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.mini-btn {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 5px 8px;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+.mini-btn.danger { color: var(--pink); }
+.stats-ranking-value.danger { color: var(--pink); }
+.stats-month-bar.expense { background: linear-gradient(to right, var(--amber), var(--pink)); }
+.expense-photo-preview img {
+  width: 90px;
+  height: 90px;
+  border-radius: 10px;
+  object-fit: cover;
+  box-shadow: var(--shadow);
+  margin-bottom: 10px;
+}

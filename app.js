@@ -5,7 +5,7 @@
 
 // ─── DB ──────────────────────────────────────────────
 const DB_NAME = 'almaprint_db';
-const DB_VER  = 4;
+const DB_VER  = 5;
 let db;
 
 function openDB() {
@@ -31,6 +31,17 @@ function openDB() {
         const productStore = d.createObjectStore('products', { keyPath: 'id' });
         productStore.createIndex('normalizedName', 'normalizedName', { unique: true });
         productStore.createIndex('name', 'name');
+      }
+      if (!d.objectStoreNames.contains('providers')) {
+        const providerStore = d.createObjectStore('providers', { keyPath: 'id' });
+        providerStore.createIndex('normalizedName', 'normalizedName', { unique: true });
+        providerStore.createIndex('name', 'name');
+      }
+      if (!d.objectStoreNames.contains('expenses')) {
+        const expenseStore = d.createObjectStore('expenses', { keyPath: 'id' });
+        expenseStore.createIndex('date', 'date');
+        expenseStore.createIndex('providerId', 'providerId');
+        expenseStore.createIndex('category', 'category');
       }
     };
     req.onsuccess = e => { db = e.target.result; resolve(db); };
@@ -122,6 +133,9 @@ const DEFAULT_WA_MSG = 'Hola {cliente}, soy Juan de AlmaPrint. Te escribo para r
 let orders = [];
 let clients = [];
 let products = [];
+let providers = [];
+let expenses = [];
+let businessTab = 'resumen';
 let currentClient = null;
 let currentProduct = null;
 let editingClientId = null;
@@ -953,6 +967,8 @@ async function migrateOrdersToProducts() {
     await dbPut('orders', order);
   }
   products = await dbGetAll('products');
+  providers = await dbGetAll('providers');
+  expenses = await dbGetAll('expenses');
 }
 
 
@@ -1097,14 +1113,305 @@ function setStatsRange(range) {
   renderStats();
 }
 
+function getProviderName(id, fallback = '') {
+  return providers.find(p => p.id === id)?.name || fallback || 'Sin proveedor';
+}
+
+function normalizeProviderName(name) {
+  return normalizeClientName(name);
+}
+
+function findProviderByName(name) {
+  const normalizedName = normalizeProviderName(name);
+  if (!normalizedName) return null;
+  return providers.find(p => p.normalizedName === normalizedName) || null;
+}
+
+async function saveProviderFromForm() {
+  const id = document.getElementById('provider-id')?.value || '';
+  const name = document.getElementById('provider-name')?.value.trim();
+  if (!name) { showToast('Escribe el nombre del proveedor'); return; }
+
+  const normalizedName = normalizeProviderName(name);
+  const duplicate = providers.find(p => p.normalizedName === normalizedName && p.id !== id);
+  if (duplicate) { showToast('Ese proveedor ya existe'); return; }
+
+  const now = Date.now();
+  const provider = {
+    id: id || uid(),
+    name,
+    normalizedName,
+    phone: document.getElementById('provider-phone')?.value.trim() || '',
+    email: document.getElementById('provider-email')?.value.trim() || '',
+    web: document.getElementById('provider-web')?.value.trim() || '',
+    notes: document.getElementById('provider-notes')?.value.trim() || '',
+    createdAt: providers.find(p => p.id === id)?.createdAt || now,
+    updatedAt: now
+  };
+
+  await dbPut('providers', provider);
+  providers = id ? providers.map(p => p.id === id ? provider : p) : [...providers, provider];
+  showToast(id ? 'Proveedor actualizado' : 'Proveedor creado ✓');
+  renderStats();
+}
+
+function providerOptionList(selectedId = '') {
+  const opts = providers
+    .slice()
+    .sort((a,b) => a.name.localeCompare(b.name, 'es'))
+    .map(p => `<option value="${escHtml(p.id)}" ${p.id === selectedId ? 'selected' : ''}>${escHtml(p.name)}</option>`)
+    .join('');
+  return `<option value="">— Sin proveedor —</option>${opts}`;
+}
+
+function categoryOptionList(selected = '') {
+  return EXPENSE_CATEGORIES.map(c => `<option value="${escHtml(c)}" ${c === selected ? 'selected' : ''}>${escHtml(c)}</option>`).join('');
+}
+
+function renderProviderForm(provider = null) {
+  return `<div class="business-form-card">
+    <input type="hidden" id="provider-id" value="${escHtml(provider?.id || '')}">
+    <div class="section-title">${provider ? 'Editar proveedor' : 'Nuevo proveedor'}</div>
+    <div class="form-field"><label class="form-label">Nombre *</label><input class="form-input" id="provider-name" value="${escHtml(provider?.name || '')}" placeholder="Ej: Brildor"></div>
+    <div class="form-row">
+      <div class="form-field"><label class="form-label">Teléfono</label><input class="form-input" id="provider-phone" value="${escHtml(provider?.phone || '')}" type="tel"></div>
+      <div class="form-field"><label class="form-label">Email</label><input class="form-input" id="provider-email" value="${escHtml(provider?.email || '')}" type="email"></div>
+    </div>
+    <div class="form-field"><label class="form-label">Web</label><input class="form-input" id="provider-web" value="${escHtml(provider?.web || '')}" placeholder="https://..."></div>
+    <div class="form-field"><label class="form-label">Notas</label><textarea class="form-textarea" id="provider-notes">${escHtml(provider?.notes || '')}</textarea></div>
+    <button class="btn-full" onclick="saveProviderFromForm()">Guardar proveedor</button>
+  </div>`;
+}
+
+async function saveExpenseFromForm() {
+  const amount = toNumber(document.getElementById('expense-amount')?.value);
+  const date = document.getElementById('expense-date')?.value || today();
+  const category = document.getElementById('expense-category')?.value || 'Otros';
+  if (amount <= 0) { showToast('Introduce un importe'); return; }
+
+  const fileInput = document.getElementById('expense-photo');
+  let photo = '';
+  const existingId = document.getElementById('expense-id')?.value || '';
+  const existing = existingId ? expenses.find(e => e.id === existingId) : null;
+  if (fileInput?.files?.[0]) {
+    photo = await fileToDataUrl(fileInput.files[0]);
+  } else {
+    photo = existing?.photo || '';
+  }
+
+  const now = Date.now();
+  const expense = {
+    id: existingId || uid(),
+    providerId: document.getElementById('expense-provider')?.value || '',
+    providerName: getProviderName(document.getElementById('expense-provider')?.value || ''),
+    date,
+    invoiceNumber: document.getElementById('expense-invoice')?.value.trim() || '',
+    category,
+    amount,
+    notes: document.getElementById('expense-notes')?.value.trim() || '',
+    photo,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now
+  };
+
+  await dbPut('expenses', expense);
+  expenses = existingId ? expenses.map(e => e.id === existingId ? expense : e) : [...expenses, expense];
+  showToast(existingId ? 'Gasto actualizado' : 'Gasto registrado ✓');
+  renderStats();
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function deleteExpense(id) {
+  if (!confirm('¿Eliminar este gasto?')) return;
+  await dbDelete('expenses', id);
+  expenses = expenses.filter(e => e.id !== id);
+  showToast('Gasto eliminado');
+  renderStats();
+}
+
+async function deleteProvider(id) {
+  if (expenses.some(e => e.providerId === id)) { showToast('Tiene gastos asociados'); return; }
+  if (!confirm('¿Eliminar proveedor?')) return;
+  await dbDelete('providers', id);
+  providers = providers.filter(p => p.id !== id);
+  showToast('Proveedor eliminado');
+  renderStats();
+}
+
+function editProvider(id) {
+  businessTab = 'proveedores';
+  renderStats();
+  setTimeout(() => {
+    const p = providers.find(x => x.id === id);
+    const target = document.getElementById('business-extra-form');
+    if (target) target.innerHTML = renderProviderForm(p);
+  }, 0);
+}
+
+function editExpense(id) {
+  businessTab = 'gastos';
+  renderStats();
+  setTimeout(() => {
+    const e = expenses.find(x => x.id === id);
+    if (e) renderExpenseForm(e);
+  }, 0);
+}
+
+function renderExpenseForm(expense = null) {
+  const target = document.getElementById('business-extra-form');
+  if (!target) return;
+  target.innerHTML = `<div class="business-form-card">
+    <input type="hidden" id="expense-id" value="${escHtml(expense?.id || '')}">
+    <div class="section-title">${expense ? 'Editar gasto / factura' : 'Nuevo gasto / factura'}</div>
+    <div class="form-row">
+      <div class="form-field"><label class="form-label">Fecha</label><input class="form-input" id="expense-date" type="date" value="${escHtml(expense?.date || today())}"></div>
+      <div class="form-field"><label class="form-label">Importe (€) *</label><input class="form-input" id="expense-amount" type="number" step="0.01" value="${escHtml(expense?.amount || '')}" placeholder="0.00"></div>
+    </div>
+    <div class="form-field"><label class="form-label">Proveedor</label><select class="form-select" id="expense-provider">${providerOptionList(expense?.providerId || '')}</select></div>
+    <div class="form-row">
+      <div class="form-field"><label class="form-label">Categoría</label><select class="form-select" id="expense-category">${categoryOptionList(expense?.category || 'Materiales')}</select></div>
+      <div class="form-field"><label class="form-label">Nº factura</label><input class="form-input" id="expense-invoice" value="${escHtml(expense?.invoiceNumber || '')}"></div>
+    </div>
+    <div class="form-field"><label class="form-label">Foto factura</label><input class="form-input" id="expense-photo" type="file" accept="image/*"></div>
+    ${expense?.photo ? `<div class="expense-photo-preview"><img src="${expense.photo}" onclick="viewPhoto('${expense.photo}')"></div>` : ''}
+    <div class="form-field"><label class="form-label">Notas</label><textarea class="form-textarea" id="expense-notes">${escHtml(expense?.notes || '')}</textarea></div>
+    <button class="btn-full" onclick="saveExpenseFromForm()">Guardar gasto</button>
+  </div>`;
+}
+
+function setBusinessTab(tab) {
+  businessTab = tab;
+  renderStats();
+}
+
+function getBusinessOrders() {
+  return getSalesOrders();
+}
+
+function isDateInCurrentMonth(dateStr) {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  const n = new Date();
+  return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth();
+}
+
+function renderProviderRows() {
+  if (!providers.length) return '<div class="empty-state compact"><div class="empty-title">Sin proveedores todavía</div></div>';
+  return providers.slice().sort((a,b)=>a.name.localeCompare(b.name,'es')).map(p => {
+    const provExpenses = expenses.filter(e => e.providerId === p.id);
+    const total = provExpenses.reduce((s,e)=>s+toNumber(e.amount),0);
+    const last = provExpenses.slice().sort((a,b)=>new Date(b.date)-new Date(a.date))[0]?.date;
+    return `<div class="stats-ranking-row">
+      <div class="stats-ranking-main">
+        <div class="stats-ranking-name">${escHtml(p.name)}</div>
+        <div class="stats-ranking-sub">${provExpenses.length} facturas · Última ${fmtDate(last)}</div>
+      </div>
+      <div class="stats-ranking-actions">
+        <div class="stats-ranking-value">${formatMoney(total)}</div>
+        <button class="mini-btn" onclick="editProvider('${p.id}')">Editar</button>
+        <button class="mini-btn danger" onclick="deleteProvider('${p.id}')">Borrar</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderExpenseRows(list = expenses) {
+  const sorted = list.slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
+  if (!sorted.length) return '<div class="empty-state compact"><div class="empty-title">Sin gastos todavía</div></div>';
+  return sorted.map(e => `<div class="stats-ranking-row">
+    <div class="stats-ranking-main">
+      <div class="stats-ranking-name">${escHtml(e.providerName || getProviderName(e.providerId))}</div>
+      <div class="stats-ranking-sub">${fmtDate(e.date)} · ${escHtml(e.category || 'Otros')}${e.invoiceNumber ? ' · Fact. ' + escHtml(e.invoiceNumber) : ''}</div>
+    </div>
+    <div class="stats-ranking-actions">
+      ${e.photo ? `<button class="mini-btn" onclick="viewPhoto('${e.photo}')">Foto</button>` : ''}
+      <div class="stats-ranking-value danger">${formatMoney(e.amount)}</div>
+      <button class="mini-btn" onclick="editExpense('${e.id}')">Editar</button>
+      <button class="mini-btn danger" onclick="deleteExpense('${e.id}')">Borrar</button>
+    </div>
+  </div>`).join('');
+}
+
+function renderCategorySummary(list = expenses) {
+  const groups = {};
+  list.forEach(e => {
+    const k = e.category || 'Otros';
+    groups[k] = (groups[k] || 0) + toNumber(e.amount);
+  });
+  const rows = Object.entries(groups).sort((a,b)=>b[1]-a[1]);
+  if (!rows.length) return '<div class="empty-state compact"><div class="empty-title">Sin categorías todavía</div></div>';
+  return rows.map(([cat,total]) => `<div class="stats-month-row"><div class="stats-month-label">${escHtml(cat)}</div><div class="stats-month-bar-wrap"><div class="stats-month-bar expense" style="width:100%"></div></div><div class="stats-month-value">${formatMoney(total)}</div></div>`).join('');
+}
+
+function renderBusinessContent(filteredOrders, filteredExpenses) {
+  const invoiced = filteredOrders.reduce((sum, o) => sum + toNumber(o.price), 0);
+  const paid = filteredOrders.reduce((sum, o) => sum + toNumber(o.paid), 0);
+  const pending = filteredOrders.reduce((sum, o) => sum + Math.max(toNumber(o.price) - toNumber(o.paid), 0), 0);
+  const expenseTotal = filteredExpenses.reduce((sum, e) => sum + toNumber(e.amount), 0);
+  const profit = paid - expenseTotal;
+  const monthOrders = getBusinessOrders().filter(o => isDateInCurrentMonth(o.createdAt));
+  const monthExpenses = expenses.filter(e => isDateInCurrentMonth(e.date));
+  const monthPaid = monthOrders.reduce((s,o)=>s+toNumber(o.paid),0);
+  const monthInvoiced = monthOrders.reduce((s,o)=>s+toNumber(o.price),0);
+  const monthPending = monthOrders.reduce((s,o)=>s+Math.max(toNumber(o.price)-toNumber(o.paid),0),0);
+  const monthExpenseTotal = monthExpenses.reduce((s,e)=>s+toNumber(e.amount),0);
+
+  if (businessTab === 'proveedores') {
+    return `<div id="business-extra-form">${renderProviderForm()}</div><div class="section-title">Proveedores</div><div class="stats-card">${renderProviderRows()}</div>`;
+  }
+
+  if (businessTab === 'gastos') {
+    return `<div id="business-extra-form"></div>
+      <button class="btn-full" onclick="renderExpenseForm()">+ Añadir gasto / factura</button>
+      <div class="section-title">Gastos y facturas</div><div class="stats-card">${renderExpenseRows()}</div>`;
+  }
+
+  return `
+    <div class="stats-grid">
+      <div class="stat-card accent-pink"><div class="stat-label">Facturado</div><div class="stat-number small">${formatMoney(invoiced)}</div></div>
+      <div class="stat-card accent-teal"><div class="stat-label">Cobrado</div><div class="stat-number small">${formatMoney(paid)}</div></div>
+      <div class="stat-card accent-amber"><div class="stat-label">Pendiente</div><div class="stat-number small">${formatMoney(pending)}</div></div>
+      <div class="stat-card accent-purple"><div class="stat-label">Gastos</div><div class="stat-number small">${formatMoney(expenseTotal)}</div></div>
+      <div class="stat-card accent-teal full-width"><div class="stat-label">Beneficio caja</div><div class="stat-number small">${formatMoney(profit)}</div><div class="stat-link">Cobrado menos gastos</div></div>
+    </div>
+
+    <div class="stats-card">
+      <div class="section-title">Caja AlmaPrint · Este mes</div>
+      <div class="business-cash-grid">
+        <div><span>Facturado</span><strong>${formatMoney(monthInvoiced)}</strong></div>
+        <div><span>Cobrado</span><strong>${formatMoney(monthPaid)}</strong></div>
+        <div><span>Pendiente</span><strong>${formatMoney(monthPending)}</strong></div>
+        <div><span>Gastos</span><strong>${formatMoney(monthExpenseTotal)}</strong></div>
+        <div class="profit"><span>Beneficio caja</span><strong>${formatMoney(monthPaid - monthExpenseTotal)}</strong></div>
+      </div>
+    </div>
+
+    <div class="section-title">Gastos por categoría</div>
+    <div class="stats-card">${renderCategorySummary(filteredExpenses)}</div>
+
+    <div class="section-title">Últimos gastos</div>
+    <div class="stats-card">${renderExpenseRows(filteredExpenses.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,8))}</div>
+  `;
+}
+
 function renderStats() {
   const root = document.getElementById('stats-content');
   if (!root) return;
 
   const filtered = getSalesOrders().filter(isOrderInStatsRange);
+  const filteredExpenses = expenses.filter(e => isOrderInStatsRange({ createdAt: e.date }));
   const invoiced = filtered.reduce((sum, o) => sum + toNumber(o.price), 0);
   const paid = filtered.reduce((sum, o) => sum + toNumber(o.paid), 0);
   const pending = filtered.reduce((sum, o) => sum + Math.max(toNumber(o.price) - toNumber(o.paid), 0), 0);
+  const expenseTotal = filteredExpenses.reduce((sum, e) => sum + toNumber(e.amount), 0);
   const avgTicket = filtered.length ? invoiced / filtered.length : 0;
   const delivered = filtered.filter(o => o.status === 'entregado').length;
   const paidPct = invoiced > 0 ? Math.round((paid / invoiced) * 100) : 0;
@@ -1125,43 +1432,47 @@ function renderStats() {
       <button class="stats-chip ${statsRange === 'year' ? 'active' : ''}" data-range="year" onclick="setStatsRange('year')">Este año</button>
     </div>
 
-    <div class="stats-grid">
-      <div class="stat-card accent-pink"><div class="stat-label">Facturado</div><div class="stat-number small">${formatMoney(invoiced)}</div></div>
-      <div class="stat-card accent-teal"><div class="stat-label">Cobrado</div><div class="stat-number small">${formatMoney(paid)}</div></div>
-      <div class="stat-card accent-amber"><div class="stat-label">Pendiente</div><div class="stat-number small">${formatMoney(pending)}</div></div>
-      <div class="stat-card accent-purple"><div class="stat-label">Ticket medio</div><div class="stat-number small">${formatMoney(avgTicket)}</div></div>
+    <div class="business-tabs">
+      <button class="business-tab ${businessTab === 'resumen' ? 'active' : ''}" onclick="setBusinessTab('resumen')">Resumen</button>
+      <button class="business-tab ${businessTab === 'ventas' ? 'active' : ''}" onclick="setBusinessTab('ventas')">Ventas</button>
+      <button class="business-tab ${businessTab === 'proveedores' ? 'active' : ''}" onclick="setBusinessTab('proveedores')">Proveedores</button>
+      <button class="business-tab ${businessTab === 'gastos' ? 'active' : ''}" onclick="setBusinessTab('gastos')">Gastos</button>
     </div>
 
-    <div class="stats-insights">
-      <div><strong>${filtered.length}</strong><span>Pedidos</span></div>
-      <div><strong>${delivered}</strong><span>Entregados</span></div>
-      <div><strong>${paidPct}%</strong><span>Cobrado</span></div>
-    </div>
+    ${businessTab === 'ventas' ? `
+      <div class="stats-grid">
+        <div class="stat-card accent-pink"><div class="stat-label">Facturado</div><div class="stat-number small">${formatMoney(invoiced)}</div></div>
+        <div class="stat-card accent-teal"><div class="stat-label">Cobrado</div><div class="stat-number small">${formatMoney(paid)}</div></div>
+        <div class="stat-card accent-amber"><div class="stat-label">Pendiente</div><div class="stat-number small">${formatMoney(pending)}</div></div>
+        <div class="stat-card accent-purple"><div class="stat-label">Ticket medio</div><div class="stat-number small">${formatMoney(avgTicket)}</div></div>
+      </div>
 
-    <div class="stats-card">
-      <div class="section-title">AlmaPrint Insights</div>
-      <div class="insight-line">🏆 Mejor cliente: <strong>${escHtml(topClient)}</strong></div>
-      <div class="insight-line">📦 Producto más vendido: <strong>${escHtml(topProduct)}</strong></div>
-      <div class="insight-line">💰 Pendiente de cobro: <strong>${formatMoney(pending)}</strong></div>
-    </div>
+      <div class="stats-insights">
+        <div><strong>${filtered.length}</strong><span>Pedidos</span></div>
+        <div><strong>${delivered}</strong><span>Entregados</span></div>
+        <div><strong>${paidPct}%</strong><span>Cobrado</span></div>
+      </div>
 
-    <div class="section-title">Top clientes por facturación</div>
-    <div class="stats-card">${clientsByMoney.length ? clientsByMoney.map(r => rankingRow(r, 'client', 'invoiced')).join('') : '<div class="empty-state compact"><div class="empty-title">Sin clientes todavía</div></div>'}</div>
+      <div class="stats-card">
+        <div class="section-title">AlmaPrint Insights</div>
+        <div class="insight-line">🏆 Mejor cliente: <strong>${escHtml(topClient)}</strong></div>
+        <div class="insight-line">📦 Producto más vendido: <strong>${escHtml(topProduct)}</strong></div>
+        <div class="insight-line">💰 Pendiente de cobro: <strong>${formatMoney(pending)}</strong></div>
+      </div>
 
-    <div class="section-title">Top clientes por pedidos</div>
-    <div class="stats-card">${clientsByCount.length ? clientsByCount.map(r => rankingRow(r, 'client', 'count')).join('') : '<div class="empty-state compact"><div class="empty-title">Sin clientes todavía</div></div>'}</div>
-
-    <div class="section-title">Productos más vendidos</div>
-    <div class="stats-card">${productsByCount.length ? productsByCount.map(r => rankingRow(r, 'product', 'count')).join('') : '<div class="empty-state compact"><div class="empty-title">Sin productos todavía</div></div>'}</div>
-
-    <div class="section-title">Productos por facturación</div>
-    <div class="stats-card">${productsByMoney.length ? productsByMoney.map(r => rankingRow(r, 'product', 'invoiced')).join('') : '<div class="empty-state compact"><div class="empty-title">Sin productos todavía</div></div>'}</div>
-
-    <div class="section-title">Pendiente de cobro</div>
-    <div class="stats-card">${renderPendingPayments(filtered)}</div>
-
-    <div class="section-title">Evolución mensual</div>
-    <div class="stats-card">${renderMonthlyEvolution(getSalesOrders())}</div>
+      <div class="section-title">Top clientes por facturación</div>
+      <div class="stats-card">${clientsByMoney.length ? clientsByMoney.map(r => rankingRow(r, 'client', 'invoiced')).join('') : '<div class="empty-state compact"><div class="empty-title">Sin clientes todavía</div></div>'}</div>
+      <div class="section-title">Top clientes por pedidos</div>
+      <div class="stats-card">${clientsByCount.length ? clientsByCount.map(r => rankingRow(r, 'client', 'count')).join('') : '<div class="empty-state compact"><div class="empty-title">Sin clientes todavía</div></div>'}</div>
+      <div class="section-title">Productos más vendidos</div>
+      <div class="stats-card">${productsByCount.length ? productsByCount.map(r => rankingRow(r, 'product', 'count')).join('') : '<div class="empty-state compact"><div class="empty-title">Sin productos todavía</div></div>'}</div>
+      <div class="section-title">Productos por facturación</div>
+      <div class="stats-card">${productsByMoney.length ? productsByMoney.map(r => rankingRow(r, 'product', 'invoiced')).join('') : '<div class="empty-state compact"><div class="empty-title">Sin productos todavía</div></div>'}</div>
+      <div class="section-title">Pendiente de cobro</div>
+      <div class="stats-card">${renderPendingPayments(filtered)}</div>
+      <div class="section-title">Evolución mensual</div>
+      <div class="stats-card">${renderMonthlyEvolution(getSalesOrders())}</div>
+    ` : renderBusinessContent(filtered, filteredExpenses)}
 
     <div style="height:16px"></div>
   `;
@@ -1556,7 +1867,7 @@ function closeModal(id) {
 
 // ─── SETTINGS ────────────────────────────────────────
 async function exportBackup() {
-  const data = { version: 3, exportedAt: new Date().toISOString(), orders, clients, products };
+  const data = { version: 5, exportedAt: new Date().toISOString(), orders, clients, products, providers, expenses };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1580,11 +1891,17 @@ function importBackup() {
       await dbClear('orders');
       await dbClear('clients');
       await dbClear('products');
+      await dbClear('providers');
+      await dbClear('expenses');
       orders = data.orders;
       clients = Array.isArray(data.clients) ? data.clients : [];
       products = Array.isArray(data.products) ? data.products : [];
+      providers = Array.isArray(data.providers) ? data.providers : [];
+      expenses = Array.isArray(data.expenses) ? data.expenses : [];
       for (const c of clients) await dbPut('clients', c);
       for (const p of products) await dbPut('products', p);
+      for (const p of providers) await dbPut('providers', p);
+      for (const e of expenses) await dbPut('expenses', e);
       for (const o of orders) {
         await upsertClientFromOrder(o);
         await upsertProductFromOrder(o);
@@ -1592,6 +1909,10 @@ function importBackup() {
       }
       clients = await dbGetAll('clients');
       products = await dbGetAll('products');
+      providers = await dbGetAll('providers');
+      expenses = await dbGetAll('expenses');
+  providers = await dbGetAll('providers');
+  expenses = await dbGetAll('expenses');
       refreshClientSelect();
       refreshProductSelect();
       showToast('Copia importada ✓ — ' + orders.length + ' pedidos');
@@ -1609,9 +1930,13 @@ async function clearAllData() {
   await dbClear('orders');
   await dbClear('clients');
   await dbClear('products');
+  await dbClear('providers');
+  await dbClear('expenses');
   orders = [];
   clients = [];
   products = [];
+  providers = [];
+  expenses = [];
   refreshClientSelect();
   refreshProductSelect();
   showToast('Todos los datos eliminados');
@@ -1644,6 +1969,8 @@ async function init() {
   orders = await dbGetAll('orders');
   clients = await dbGetAll('clients');
   products = await dbGetAll('products');
+  providers = await dbGetAll('providers');
+  expenses = await dbGetAll('expenses');
 
   await migrateOrdersToClients();
   await migrateOrdersToProducts();
