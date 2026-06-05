@@ -1133,3 +1133,18 @@ h3 { font-size: 1rem; font-weight: 600; }
 .invoice-line-meta { font-size: 0.72rem; color: var(--text-2); margin-top: 2px; }
 .invoice-line-notes { font-size: 0.72rem; color: var(--text-2); margin-top: 4px; font-style: italic; }
 .invoice-line-total { font-size: 0.86rem; font-weight: 800; color: var(--pink); white-space: nowrap; }
+.view-form,
+#client-form-view,
+#product-form-view {
+  z-index: 99999 !important;
+}
+
+.detail-view,
+#client-detail-view,
+#product-detail-view {
+  z-index: 90000 !important;
+}
+
+.modal-overlay {
+  z-index: 100000 !important;
+}
