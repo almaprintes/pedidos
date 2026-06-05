@@ -671,16 +671,29 @@ function openNewClientForm(returnToOrderForm = false) {
 
 function openEditClientForm(id) {
   const c = clients.find(x => x.id === id) || currentClient;
-  if (!c) return;
+  if (!c) {
+    showToast('Cliente no encontrado');
+    return;
+  }
+
   editingClientId = c.id;
+  currentClient = c;
   orderFormReturnAfterClient = false;
+
+  const form = document.getElementById('client-form-view');
+  if (!form) {
+    showToast('Formulario de cliente no encontrado');
+    return;
+  }
+
   document.getElementById('client-form-title').textContent = 'Editar cliente';
   document.getElementById('cf-name').value = c.name || '';
   document.getElementById('cf-phone').value = c.phone || '';
   document.getElementById('cf-notes').value = c.notes || '';
-  document.getElementById('client-form-view').classList.add('active');
-}
 
+  form.classList.add('active');
+  form.scrollTop = 0;
+}
 function closeClientForm() {
   document.getElementById('client-form-view').classList.remove('active');
 }
