@@ -1741,6 +1741,16 @@ function openDetail(id) {
 
 function closeDetail() {
   document.getElementById('detail-view').classList.remove('active');
+
+  const clientDetail = document.getElementById('client-detail-view');
+  if (clientDetail && clientDetail.classList.contains('active') && currentClient) {
+    renderClientDetail();
+  }
+
+  const productDetail = document.getElementById('product-detail-view');
+  if (productDetail && productDetail.classList.contains('active') && currentProduct) {
+    renderProductDetail();
+  }
 }
 
 function renderDetailView() {
