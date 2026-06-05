@@ -1828,8 +1828,23 @@ async function changeStatus(newStatus) {
   currentOrder.status = newStatus;
   addHistoryEntry(currentOrder, `Estado → ${getStatus(newStatus).label}`);
   await dbPut('orders', currentOrder);
+
   orders = orders.map(o => o.id === currentOrder.id ? currentOrder : o);
+
   renderDetailView();
+
+  if (currentView === 'kanban') {
+    renderKanban();
+  }
+
+  if (currentView === 'list') {
+    renderList();
+  }
+
+  if (currentView === 'dashboard') {
+    renderDashboard();
+  }
+
   showToast('Estado actualizado');
 }
 
