@@ -2208,16 +2208,46 @@ async function clearAllData() {
 }
 
 function editWAMessage() {
-  const current = getSetting('wa_msg', DEFAULT_WA_MSG);
-  document.getElementById('wa-msg-edit').value = current;
+  const messages = getWhatsAppMessages();
+  const labels = {
+    idea: 'Idea / Cliente potencial',
+    pendiente: 'Pedido pendiente',
+    diseño: 'Diseño',
+    aprobacion: 'Esperando aprobación',
+    produccion: 'Producción',
+    listo: 'Listo para entregar',
+    entregado: 'Entregado',
+    seguimiento: 'Seguimiento'
+  };
+
+  document.getElementById('wa-msg-edit').value = Object.keys(labels)
+    .map(key => `### ${key} | ${labels[key]}\n${messages[key] || ''}`)
+    .join('\n\n');
+
   document.getElementById('modal-wa-edit').classList.add('active');
 }
 
 function saveWAMessage() {
-  const val = document.getElementById('wa-msg-edit').value.trim();
-  if (val) setSetting('wa_msg', val);
+  const raw = document.getElementById('wa-msg-edit').value;
+  const messages = { ...DEFAULT_WA_MESSAGES };
+
+  const blocks = raw.split(/\n(?=### )/g);
+
+  blocks.forEach(block => {
+    const lines = block.trim().split('\n');
+    const header = lines.shift() || '';
+    const match = header.match(/^###\s*([^|]+)\|?/);
+    if (!match) return;
+
+    const key = match[1].trim();
+    if (!messages[key]) return;
+
+    messages[key] = lines.join('\n').trim();
+  });
+
+  saveWhatsAppMessages(messages);
   closeModal('modal-wa-edit');
-  showToast('Mensaje guardado');
+  showToast('Mensajes WhatsApp guardados');
 }
 
 // ─── HTML HELPERS ─────────────────────────────────────
