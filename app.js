@@ -1857,6 +1857,23 @@ function addHistoryEntry(order, text) {
 }
 
 // ─── WHATSAPP ─────────────────────────────────────────
+function getWhatsAppMessages() {
+  const saved = localStorage.getItem('ap_wa_messages');
+
+  if (!saved) {
+    return { ...DEFAULT_WA_MESSAGES };
+  }
+
+  try {
+    return { ...DEFAULT_WA_MESSAGES, ...JSON.parse(saved) };
+  } catch {
+    return { ...DEFAULT_WA_MESSAGES };
+  }
+}
+
+function saveWhatsAppMessages(messages) {
+  localStorage.setItem('ap_wa_messages', JSON.stringify(messages));
+}
 function sendWhatsApp(id) {
   const o = orders.find(x => x.id === id) || currentOrder;
   if (!o || !o.phone) { showToast('Sin teléfono'); return; }
