@@ -1878,7 +1878,7 @@ function sendWhatsApp(id) {
   const o = orders.find(x => x.id === id) || currentOrder;
   if (!o || !o.phone) { showToast('Sin teléfono'); return; }
 
-  const templates = getSetting('wa_messages', DEFAULT_WA_MESSAGES);
+const templates = getWhatsAppMessages();
 
   const stateKey = (o.status || 'seguimiento')
     .toLowerCase()
