@@ -1139,7 +1139,10 @@ h3 { font-size: 1rem; font-weight: 600; }
   z-index: 99999 !important;
 }
 
-.detail-view,
+.detail-view {
+  z-index: 95000 !important;
+}
+
 #client-detail-view,
 #product-detail-view {
   z-index: 90000 !important;
