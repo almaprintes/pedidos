@@ -5,7 +5,7 @@
 
 // ─── DB ──────────────────────────────────────────────
 const DB_NAME = 'almaprint_db';
-const DB_VER  = 6;
+const DB_VER  = 7;
 let db;
 
 function openDB() {
@@ -121,6 +121,19 @@ const DEFAULT_PRODUCTS = [
 ];
 
 const PRODUCTS = DEFAULT_PRODUCTS.map(p => p.name);
+
+const EXPENSE_CATEGORIES = [
+  'Materiales',
+  'Herramientas',
+  'Transporte',
+  'Marketing',
+  'Software',
+  'Servicios',
+  'Suministros',
+  'Maquinaria',
+  'Otros'
+];
+
 
 const DEFAULT_TASKS = [
   'Recibir fotos','Crear diseño','Enviar diseño','Aprobar diseño',
@@ -1336,7 +1349,8 @@ async function importInvoiceJsonFromTextarea() {
     businessTab = 'gastos';
     renderStats();
   } catch (e) {
-    showToast('No se pudo importar la factura');
+    console.error('Error importando factura:', e);
+    showToast(e.message || 'No se pudo importar la factura');
   }
 }
 
@@ -2064,7 +2078,7 @@ function closeModal(id) {
 
 // ─── SETTINGS ────────────────────────────────────────
 async function exportBackup() {
-  const data = { version: 6, appVersion: '1.5.1', exportedAt: new Date().toISOString(), orders, clients, products, providers, expenses };
+  const data = { version: 7, appVersion: '1.5.2', exportedAt: new Date().toISOString(), orders, clients, products, providers, expenses };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
