@@ -1860,11 +1860,24 @@ function addHistoryEntry(order, text) {
 function sendWhatsApp(id) {
   const o = orders.find(x => x.id === id) || currentOrder;
   if (!o || !o.phone) { showToast('Sin teléfono'); return; }
-  const tpl = getSetting('wa_msg', DEFAULT_WA_MSG);
-  const msg = tpl.replace('{cliente}', o.client || '').replace('{producto}', o.product || '');
+
+  const templates = getSetting('wa_messages', DEFAULT_WA_MESSAGES);
+
+  const stateKey = (o.status || 'seguimiento')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  let tpl = templates[stateKey] || templates.seguimiento;
+
+  const msg = tpl
+    .replaceAll('{cliente}', o.client || '')
+    .replaceAll('{producto}', o.product || '')
+    .replaceAll('{estado}', o.status || '')
+    .replaceAll('{fecha}', new Date().toLocaleDateString());
+
   showWAModal(o, msg);
 }
-
 function showWAModal(o, msg) {
   const overlay = document.getElementById('modal-wa');
   document.getElementById('wa-textarea').value = msg;
