@@ -140,7 +140,16 @@ const DEFAULT_TASKS = [
   'Imprimir','Sublimar / estampar','Cobrar','Entregar'
 ];
 
-const DEFAULT_WA_MSG = 'Hola {cliente}, soy Juan de AlmaPrint. Te escribo para recordarte lo que hablamos sobre tu pedido de {producto}. Cuando quieras, lo retomamos. ¡Gracias!';
+const DEFAULT_WA_MESSAGES = {
+  idea: 'Hola {cliente}, soy Juan de AlmaPrint. Te escribo porque hablamos sobre {producto}. Cuando quieras lo retomamos. ¡Gracias!',
+  pendiente: 'Hola {cliente}, tengo anotado tu pedido de {producto}. Cuando quieras seguimos adelante.',
+  diseño: 'Hola {cliente}, estoy trabajando en el diseño de {producto}. Te lo enviaré en cuanto esté listo.',
+  aprobacion: 'Hola {cliente}, ya tengo preparado el diseño de {producto}. Cuando puedas, dime si te parece correcto para continuar.',
+  produccion: 'Hola {cliente}, tu pedido de {producto} ya está en producción. Te avisaré en cuanto esté terminado.',
+  listo: 'Hola {cliente}, tu pedido de {producto} ya está listo para recoger o entregar. ¡Gracias por confiar en AlmaPrint!',
+  entregado: 'Hola {cliente}, espero que disfrutes de tu {producto}. Gracias por confiar en AlmaPrint.',
+  seguimiento: 'Hola {cliente}, soy Juan de AlmaPrint. Te escribo para hacer seguimiento de {producto}. Cuando quieras lo retomamos.'
+};
 
 // ─── STATE ───────────────────────────────────────────
 let orders = [];
