@@ -633,7 +633,21 @@ function renderClientDetail() {
     </div>
     <div class="section-title">Pedidos del cliente</div>
     <div class="order-list">
-      ${clientOrders.length ? clientOrders.map(orderListCard).join('') : '<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">Sin pedidos</div></div>'}
+${clientOrders.length ? clientOrders.map(o => `
+  <div class="list-card ${getPrioCss(o.priority)}" onclick="openDetail('${o.id}')">
+    <div class="list-card-body">
+      <div class="list-card-top">
+        <span class="list-card-name">${escHtml(o.product || 'Producto sin nombre')}</span>
+        ${getPrioBadge(o.priority || 'Normal')}
+      </div>
+      <div class="list-card-product">${escHtml(o.description || '')}</div>
+      <div class="list-card-meta">
+        <span class="status-pill ${getStatus(o.status).css}">${getStatus(o.status).short}</span>
+        ${o.deliveryDate ? `<span class="list-card-date">📅 ${fmtDate(o.deliveryDate)}</span>` : '<span class="list-card-date">Sin fecha</span>'}
+      </div>
+    </div>
+  </div>
+`).join('') : '<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">Sin pedidos</div></div>'}
     </div>`;
 }
 
