@@ -1093,3 +1093,43 @@ h3 { font-size: 1rem; font-weight: 600; }
   box-shadow: var(--shadow);
   margin-bottom: 10px;
 }
+
+
+/* ===== INVOICE IMPORT / LINES ===== */
+.btn-full.secondary {
+  background: var(--card);
+  color: var(--text);
+  border: 1.5px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+.invoice-json-textarea,
+.invoice-lines-json {
+  min-height: 180px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.invoice-lines-preview {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  margin: 12px 0;
+}
+
+.invoice-line-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.invoice-line-row:last-child { border-bottom: none; }
+.invoice-line-main { min-width: 0; flex: 1; }
+.invoice-line-title { font-size: 0.86rem; font-weight: 700; color: var(--text); }
+.invoice-line-meta { font-size: 0.72rem; color: var(--text-2); margin-top: 2px; }
+.invoice-line-notes { font-size: 0.72rem; color: var(--text-2); margin-top: 4px; font-style: italic; }
+.invoice-line-total { font-size: 0.86rem; font-weight: 800; color: var(--pink); white-space: nowrap; }

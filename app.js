@@ -5,7 +5,7 @@
 
 // ─── DB ──────────────────────────────────────────────
 const DB_NAME = 'almaprint_db';
-const DB_VER  = 5;
+const DB_VER  = 6;
 let db;
 
 function openDB() {
@@ -1168,6 +1168,178 @@ function categoryOptionList(selected = '') {
   return EXPENSE_CATEGORIES.map(c => `<option value="${escHtml(c)}" ${c === selected ? 'selected' : ''}>${escHtml(c)}</option>`).join('');
 }
 
+function normalizeInvoiceImportNumber(value) {
+  if (value === null || value === undefined || value === '') return 0;
+  const clean = String(value).replace('€', '').replace(/\s/g, '').replace(',', '.');
+  const n = parseFloat(clean);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function pick(obj, keys, fallback = '') {
+  for (const key of keys) {
+    if (obj && obj[key] !== undefined && obj[key] !== null && obj[key] !== '') return obj[key];
+  }
+  return fallback;
+}
+
+function normalizeInvoiceLine(line = {}) {
+  const quantity = normalizeInvoiceImportNumber(pick(line, ['cantidad', 'qty', 'unidades', 'units'], 1)) || 0;
+  const freeUnits = normalizeInvoiceImportNumber(pick(line, ['unidades_regaladas', 'regaladas', 'freeUnits', 'free_units', 'gratis'], 0));
+  const unitPrice = normalizeInvoiceImportNumber(pick(line, ['precio_unitario', 'unitPrice', 'unit_price', 'precio', 'price'], 0));
+  const discountPercent = normalizeInvoiceImportNumber(pick(line, ['descuento_porcentaje', 'discountPercent', 'discount_percent', 'dto_porcentaje'], 0));
+  const discountAmount = normalizeInvoiceImportNumber(pick(line, ['descuento_importe', 'discountAmount', 'discount_amount', 'dto_importe'], 0));
+  const subtotal = normalizeInvoiceImportNumber(pick(line, ['base_linea', 'subtotal', 'base', 'importe_base'], 0));
+  const taxPercent = normalizeInvoiceImportNumber(pick(line, ['iva_porcentaje', 'taxPercent', 'tax_percent', 'iva'], 0));
+  const taxAmount = normalizeInvoiceImportNumber(pick(line, ['iva_importe', 'taxAmount', 'tax_amount'], 0));
+  const totalLine = normalizeInvoiceImportNumber(pick(line, ['total_linea', 'totalLine', 'total_line', 'importe', 'total'], 0));
+
+  return {
+    description: String(pick(line, ['descripcion', 'description', 'concepto', 'articulo', 'producto', 'name'], '')).trim(),
+    reference: String(pick(line, ['referencia', 'reference', 'ref', 'sku', 'codigo'], '')).trim(),
+    quantity,
+    freeUnits,
+    unitPrice,
+    discountPercent,
+    discountAmount,
+    subtotal,
+    taxPercent,
+    taxAmount,
+    totalLine,
+    notes: String(pick(line, ['notas', 'notes', 'observaciones'], '')).trim()
+  };
+}
+
+function normalizeInvoiceImportData(data = {}) {
+  const linesSource = pick(data, ['lineas', 'lines', 'items', 'productos', 'articulos'], []);
+  const invoiceLines = Array.isArray(linesSource) ? linesSource.map(normalizeInvoiceLine) : [];
+  const lineTotal = invoiceLines.reduce((sum, line) => sum + normalizeInvoiceImportNumber(line.totalLine), 0);
+  const amount = normalizeInvoiceImportNumber(pick(data, ['total', 'importe_total', 'amount', 'importe', 'total_factura'], lineTotal));
+
+  return {
+    providerName: String(pick(data, ['proveedor', 'provider', 'supplier', 'empresa'], '')).trim(),
+    date: String(pick(data, ['fecha', 'date', 'fecha_factura'], today())).slice(0, 10),
+    invoiceNumber: String(pick(data, ['numero_factura', 'factura', 'invoiceNumber', 'invoice_number', 'number', 'numero'], '')).trim(),
+    category: String(pick(data, ['categoria', 'category'], 'Materiales')).trim() || 'Materiales',
+    amount,
+    subtotal: normalizeInvoiceImportNumber(pick(data, ['base_imponible', 'subtotal', 'base'], 0)),
+    tax: normalizeInvoiceImportNumber(pick(data, ['iva', 'tax', 'impuestos'], 0)),
+    discountTotal: normalizeInvoiceImportNumber(pick(data, ['descuento_total', 'discountTotal', 'discount_total'], 0)),
+    notes: String(pick(data, ['notas', 'notes', 'observaciones'], '')).trim(),
+    invoiceLines,
+    rawImport: data
+  };
+}
+
+async function upsertProviderFromName(name) {
+  const providerName = String(name || '').trim();
+  if (!providerName) return null;
+
+  const normalizedName = normalizeProviderName(providerName);
+  let provider = providers.find(p => p.normalizedName === normalizedName);
+  if (provider) return provider;
+
+  const now = Date.now();
+  provider = {
+    id: uid(),
+    name: providerName,
+    normalizedName,
+    phone: '',
+    email: '',
+    web: '',
+    notes: 'Creado automáticamente al importar factura',
+    createdAt: now,
+    updatedAt: now
+  };
+
+  await dbPut('providers', provider);
+  providers = [...providers, provider];
+  return provider;
+}
+
+function renderInvoiceLinesPreview(lines = []) {
+  if (!Array.isArray(lines) || !lines.length) return '';
+  return `<div class="invoice-lines-preview">
+    <div class="section-title">Líneas de factura <span>${lines.length}</span></div>
+    ${lines.map(line => `<div class="invoice-line-row">
+      <div class="invoice-line-main">
+        <div class="invoice-line-title">${escHtml(line.description || 'Artículo sin descripción')}</div>
+        <div class="invoice-line-meta">
+          ${line.reference ? `Ref. ${escHtml(line.reference)} · ` : ''}${line.quantity || 0} uds${line.freeUnits ? ` · ${line.freeUnits} regaladas` : ''}${line.discountPercent ? ` · dto ${line.discountPercent}%` : ''}${line.discountAmount ? ` · dto ${formatMoney(line.discountAmount)}` : ''}
+        </div>
+        ${line.notes ? `<div class="invoice-line-notes">${escHtml(line.notes)}</div>` : ''}
+      </div>
+      <div class="invoice-line-total">${formatMoney(line.totalLine)}</div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function renderInvoiceImportForm() {
+  const target = document.getElementById('business-extra-form');
+  if (!target) return;
+  target.innerHTML = `<div class="business-form-card">
+    <div class="section-title">Importar factura desde ChatGPT</div>
+    <div class="settings-warning" style="margin-bottom:12px">
+      <span>💡</span>
+      <span>Pega aquí el JSON que te devuelva ChatGPT al leer la foto de la factura. Se guardarán el proveedor, la factura/gasto y todas las líneas.</span>
+    </div>
+    <div class="form-field">
+      <label class="form-label">JSON de factura</label>
+      <textarea class="form-textarea invoice-json-textarea" id="invoice-import-json" placeholder='{"proveedor":"Brildor","fecha":"2026-06-04","numero_factura":"...","categoria":"Materiales","total":61.20,"lineas":[...]}'></textarea>
+    </div>
+    <button class="btn-full" onclick="importInvoiceJsonFromTextarea()">Importar factura</button>
+  </div>`;
+}
+
+async function importInvoiceJsonFromTextarea() {
+  const textarea = document.getElementById('invoice-import-json');
+  const raw = textarea?.value.trim();
+  if (!raw) { showToast('Pega el JSON de la factura'); return; }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    showToast('JSON no válido');
+    return;
+  }
+
+  try {
+    const data = normalizeInvoiceImportData(parsed);
+    if (!data.providerName) { showToast('Falta proveedor'); return; }
+    if (data.amount <= 0) { showToast('Falta importe total'); return; }
+
+    const provider = await upsertProviderFromName(data.providerName);
+    const now = Date.now();
+    const expense = {
+      id: uid(),
+      providerId: provider?.id || '',
+      providerName: provider?.name || data.providerName,
+      date: data.date || today(),
+      invoiceNumber: data.invoiceNumber,
+      category: EXPENSE_CATEGORIES.includes(data.category) ? data.category : 'Materiales',
+      amount: data.amount,
+      subtotal: data.subtotal,
+      tax: data.tax,
+      discountTotal: data.discountTotal,
+      notes: data.notes,
+      photo: '',
+      invoiceLines: data.invoiceLines,
+      rawImport: data.rawImport,
+      importedAt: now,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    await dbPut('expenses', expense);
+    expenses = [...expenses, expense];
+    showToast(`Factura importada ✓ · ${data.invoiceLines.length} líneas`);
+    businessTab = 'gastos';
+    renderStats();
+  } catch (e) {
+    showToast('No se pudo importar la factura');
+  }
+}
+
 function renderProviderForm(provider = null) {
   return `<div class="business-form-card">
     <input type="hidden" id="provider-id" value="${escHtml(provider?.id || '')}">
@@ -1200,6 +1372,18 @@ async function saveExpenseFromForm() {
   }
 
   const now = Date.now();
+  let invoiceLines = existing?.invoiceLines || [];
+  const linesRaw = document.getElementById('expense-lines-json')?.value.trim() || '';
+  if (linesRaw) {
+    try {
+      const parsedLines = JSON.parse(linesRaw);
+      if (Array.isArray(parsedLines)) invoiceLines = parsedLines.map(normalizeInvoiceLine);
+    } catch (e) {
+      showToast('Líneas JSON no válidas');
+      return;
+    }
+  }
+
   const expense = {
     id: existingId || uid(),
     providerId: document.getElementById('expense-provider')?.value || '',
@@ -1208,8 +1392,12 @@ async function saveExpenseFromForm() {
     invoiceNumber: document.getElementById('expense-invoice')?.value.trim() || '',
     category,
     amount,
+    subtotal: toNumber(document.getElementById('expense-subtotal')?.value),
+    tax: toNumber(document.getElementById('expense-tax')?.value),
+    discountTotal: toNumber(document.getElementById('expense-discount')?.value),
     notes: document.getElementById('expense-notes')?.value.trim() || '',
     photo,
+    invoiceLines,
     createdAt: existing?.createdAt || now,
     updatedAt: now
   };
@@ -1280,8 +1468,15 @@ function renderExpenseForm(expense = null) {
       <div class="form-field"><label class="form-label">Categoría</label><select class="form-select" id="expense-category">${categoryOptionList(expense?.category || 'Materiales')}</select></div>
       <div class="form-field"><label class="form-label">Nº factura</label><input class="form-input" id="expense-invoice" value="${escHtml(expense?.invoiceNumber || '')}"></div>
     </div>
+    <div class="form-row">
+      <div class="form-field"><label class="form-label">Base imponible</label><input class="form-input" id="expense-subtotal" type="number" step="0.01" value="${escHtml(expense?.subtotal || '')}" placeholder="0.00"></div>
+      <div class="form-field"><label class="form-label">IVA</label><input class="form-input" id="expense-tax" type="number" step="0.01" value="${escHtml(expense?.tax || '')}" placeholder="0.00"></div>
+    </div>
+    <div class="form-field"><label class="form-label">Descuento total</label><input class="form-input" id="expense-discount" type="number" step="0.01" value="${escHtml(expense?.discountTotal || '')}" placeholder="0.00"></div>
     <div class="form-field"><label class="form-label">Foto factura</label><input class="form-input" id="expense-photo" type="file" accept="image/*"></div>
     ${expense?.photo ? `<div class="expense-photo-preview"><img src="${expense.photo}" onclick="viewPhoto('${expense.photo}')"></div>` : ''}
+    ${renderInvoiceLinesPreview(expense?.invoiceLines || [])}
+    <div class="form-field"><label class="form-label">Líneas de factura en JSON</label><textarea class="form-textarea invoice-lines-json" id="expense-lines-json" placeholder="Opcional. Pega aquí un array JSON de líneas si quieres editarlas.">${expense?.invoiceLines?.length ? escHtml(JSON.stringify(expense.invoiceLines, null, 2)) : ''}</textarea></div>
     <div class="form-field"><label class="form-label">Notas</label><textarea class="form-textarea" id="expense-notes">${escHtml(expense?.notes || '')}</textarea></div>
     <button class="btn-full" onclick="saveExpenseFromForm()">Guardar gasto</button>
   </div>`;
@@ -1329,10 +1524,11 @@ function renderExpenseRows(list = expenses) {
   return sorted.map(e => `<div class="stats-ranking-row">
     <div class="stats-ranking-main">
       <div class="stats-ranking-name">${escHtml(e.providerName || getProviderName(e.providerId))}</div>
-      <div class="stats-ranking-sub">${fmtDate(e.date)} · ${escHtml(e.category || 'Otros')}${e.invoiceNumber ? ' · Fact. ' + escHtml(e.invoiceNumber) : ''}</div>
+      <div class="stats-ranking-sub">${fmtDate(e.date)} · ${escHtml(e.category || 'Otros')}${e.invoiceNumber ? ' · Fact. ' + escHtml(e.invoiceNumber) : ''}${e.invoiceLines?.length ? ' · ' + e.invoiceLines.length + ' líneas' : ''}${e.discountTotal ? ' · dto ' + formatMoney(e.discountTotal) : ''}</div>
     </div>
     <div class="stats-ranking-actions">
       ${e.photo ? `<button class="mini-btn" onclick="viewPhoto('${e.photo}')">Foto</button>` : ''}
+      ${e.invoiceLines?.length ? `<button class="mini-btn" onclick="editExpense('${e.id}')">Líneas</button>` : ''}
       <div class="stats-ranking-value danger">${formatMoney(e.amount)}</div>
       <button class="mini-btn" onclick="editExpense('${e.id}')">Editar</button>
       <button class="mini-btn danger" onclick="deleteExpense('${e.id}')">Borrar</button>
@@ -1370,7 +1566,8 @@ function renderBusinessContent(filteredOrders, filteredExpenses) {
 
   if (businessTab === 'gastos') {
     return `<div id="business-extra-form"></div>
-      <button class="btn-full" onclick="renderExpenseForm()">+ Añadir gasto / factura</button>
+      <button class="btn-full" onclick="renderInvoiceImportForm()">🤖 Importar factura JSON</button>
+      <button class="btn-full secondary" onclick="renderExpenseForm()">+ Añadir gasto / factura manual</button>
       <div class="section-title">Gastos y facturas</div><div class="stats-card">${renderExpenseRows()}</div>`;
   }
 
@@ -1867,7 +2064,7 @@ function closeModal(id) {
 
 // ─── SETTINGS ────────────────────────────────────────
 async function exportBackup() {
-  const data = { version: 5, exportedAt: new Date().toISOString(), orders, clients, products, providers, expenses };
+  const data = { version: 6, appVersion: '1.5.1', exportedAt: new Date().toISOString(), orders, clients, products, providers, expenses };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
