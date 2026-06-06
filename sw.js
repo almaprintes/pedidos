@@ -1,4 +1,4 @@
-const CACHE_NAME = 'almaprint-pedidos-v152-facturas-json';
+const CACHE_NAME = 'almaprint-pedidos-v154-nav-fix';
 const ASSETS = [
   './',
   './index.html',

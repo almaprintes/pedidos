@@ -160,6 +160,7 @@ let expenses = [];
 let businessTab = 'resumen';
 let currentClient = null;
 let currentProduct = null;
+let detailReturnTarget = null;
 let editingClientId = null;
 let editingProductId = null;
 let clientSearch = '';
@@ -597,13 +598,27 @@ function clientListCard(c) {
 
 function openClientDetail(id) {
   currentClient = clients.find(c => c.id === id);
-  if (!currentClient) return;
+  if (!currentClient) {
+    showToast('Cliente no encontrado');
+    return;
+  }
+
+  const detailView = document.getElementById('detail-view');
+  if (detailView) detailView.classList.remove('active');
+
   renderClientDetail();
   document.getElementById('client-detail-view').classList.add('active');
 }
 
 function closeClientDetail() {
-  document.getElementById('client-detail-view').classList.remove('active');
+  const view = document.getElementById('client-detail-view');
+  if (view) view.classList.remove('active');
+}
+
+function openOrderFromClient(orderId, clientId) {
+  detailReturnTarget = { type: 'client', id: clientId };
+  closeClientDetail();
+  openDetail(orderId);
 }
 
 function renderClientDetail() {
@@ -634,7 +649,7 @@ function renderClientDetail() {
     <div class="section-title">Pedidos del cliente</div>
     <div class="order-list">
 ${clientOrders.length ? clientOrders.map(o => `
-<div class="list-card ${getPrioCss(o.priority)}" onclick="closeClientDetail(); openDetail('${o.id}')">
+<div class="list-card ${getPrioCss(o.priority)}" onclick="openOrderFromClient('${o.id}', '${c.id}')">
     <div class="list-card-body">
       <div class="list-card-top">
         <span class="list-card-name">${escHtml(o.product || 'Producto sin nombre')}</span>
@@ -1740,16 +1755,19 @@ function openDetail(id) {
 }
 
 function closeDetail() {
-  document.getElementById('detail-view').classList.remove('active');
+  const detailView = document.getElementById('detail-view');
+  if (detailView) detailView.classList.remove('active');
 
-  const clientDetail = document.getElementById('client-detail-view');
-  if (clientDetail && clientDetail.classList.contains('active') && currentClient) {
-    renderClientDetail();
+  const target = detailReturnTarget;
+  detailReturnTarget = null;
+
+  if (target?.type === 'client') {
+    openClientDetail(target.id);
+    return;
   }
 
-  const productDetail = document.getElementById('product-detail-view');
-  if (productDetail && productDetail.classList.contains('active') && currentProduct) {
-    renderProductDetail();
+  if (target?.type === 'product') {
+    openProductDetail(target.id);
   }
 }
 
@@ -2169,7 +2187,7 @@ function closeModal(id) {
 
 // ─── SETTINGS ────────────────────────────────────────
 async function exportBackup() {
-  const data = { version: 7, appVersion: '1.5.2', exportedAt: new Date().toISOString(), orders, clients, products, providers, expenses };
+  const data = { version: 7, appVersion: '1.5.4', exportedAt: new Date().toISOString(), orders, clients, products, providers, expenses };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
