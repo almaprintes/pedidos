@@ -1793,7 +1793,7 @@ function renderDetailView() {
 
 function renderDetailTab(tab) {
   detailTab = tab;
-  document.querySelectorAll('.detail-tab').forEach(t => {
+document.querySelectorAll('#detail-view .detail-tab').forEach(t => {
     t.classList.toggle('active', t.dataset.tab === tab);
   });
   document.querySelectorAll('.detail-tab-content').forEach(c => {
