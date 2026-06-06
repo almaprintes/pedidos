@@ -133,8 +133,16 @@ h3 { font-size: 1rem; font-weight: 600; }
   display: flex; align-items: center; justify-content: center;
   color: white; font-family: var(--font-display); font-size: 1rem; font-weight: 700;
 }
-.logo-text { font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; }
-.logo-text span { color: var(--pink); }
+.logo-text {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #E7C35A;
+}
+
+.logo-text span {
+  color: #7C3AED;
+}
 .brand-logo{
   width: 42px;
   height: 42px;
