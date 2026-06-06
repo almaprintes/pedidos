@@ -135,7 +135,13 @@ h3 { font-size: 1rem; font-weight: 600; }
 }
 .logo-text { font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; }
 .logo-text span { color: var(--pink); }
-
+.brand-logo{
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
 /* ===== DASHBOARD ===== */
 .dash-grid {
   display: grid;
