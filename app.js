@@ -634,7 +634,7 @@ function renderClientDetail() {
     <div class="section-title">Pedidos del cliente</div>
     <div class="order-list">
 ${clientOrders.length ? clientOrders.map(o => `
-  <div class="list-card ${getPrioCss(o.priority)}" onclick="openDetail('${o.id}')">
+<div class="list-card ${getPrioCss(o.priority)}" onclick="closeClientDetail(); openDetail('${o.id}')">
     <div class="list-card-body">
       <div class="list-card-top">
         <span class="list-card-name">${escHtml(o.product || 'Producto sin nombre')}</span>
