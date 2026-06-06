@@ -1796,7 +1796,7 @@ function renderDetailTab(tab) {
 document.querySelectorAll('#detail-view .detail-tab').forEach(t => {
     t.classList.toggle('active', t.dataset.tab === tab);
   });
-  document.querySelectorAll('.detail-tab-content').forEach(c => {
+document.querySelectorAll('#detail-view .detail-tab-content').forEach(c => {
     c.classList.toggle('active', c.id === 'dtab-' + tab);
   });
   const o = currentOrder;
