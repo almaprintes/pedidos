@@ -524,6 +524,11 @@ function orderListCard(o) {
 const entregadoSinCobrar =
   o.status === 'entregado' && pendienteCobro;
   return `<div class="list-card ${getPrioCss(o.priority)}" onclick="openDetail('${o.id}')">
+  ${entregadoSinCobrar ? `
+<div class="cobro-alert">
+⚠️ ENTREGADO SIN COBRAR
+</div>
+` : ''} 
     <div class="list-card-body">
       <div class="list-card-top">
         <span class="list-card-name">${escHtml(o.client)}</span>
