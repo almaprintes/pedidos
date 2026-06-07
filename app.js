@@ -414,7 +414,11 @@ function renderDashboard() {
   const activos = orders.filter(o => o.status !== 'entregado').length;
   const urgentes = orders.filter(o => o.priority === 'Urgente' && o.status !== 'entregado').length;
   const aprobaciones = orders.filter(o => o.status === 'aprobacion').length;
-  const cobros = orders.filter(o => (o.payment === 'pendiente' || o.payment === 'senal') && o.status !== 'entregado').length;
+const cobros = orders.filter(o => {
+  const price = toNumber(o.price);
+  const paid = toNumber(o.paid);
+  return price > paid;
+}).length;
   const produccion = orders.filter(o => o.status === 'produccion').length;
   const seguims = orders.filter(o => o.followup && o.status !== 'entregado').length;
 
