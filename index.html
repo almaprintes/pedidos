@@ -24,7 +24,7 @@
 <section id="view-dashboard" class="view active">
   <div class="view-header">
     <div class="app-logo">
-<img src="icon-192.png" class="brand-logo" alt="AlmaPrint">
+      <div class="logo-mark">A</div>
       <span class="logo-text">Alma<span>Print</span></span>
     </div>
     <div class="header-actions">
@@ -289,7 +289,7 @@
         </div>
         <div class="settings-item-body">
           <div class="settings-item-title">AlmaPrint Pedidos</div>
-          <div class="settings-item-desc">Versión 1.5.4 — navegación corregida 🧭</div>
+          <div class="settings-item-desc">Versión 1.5.5 — Productos inteligentes ✨</div>
         </div>
       </div>
     </div>
@@ -602,12 +602,34 @@
         <textarea class="form-textarea" id="pf-description" placeholder="Descripción base del producto..."></textarea>
       </div>
       <div class="form-field">
-        <label class="form-label">Precio (€)</label>
+        <label class="form-label">Precio venta (€)</label>
         <input class="form-input" id="pf-price" type="number" step="0.01" placeholder="0.00">
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label class="form-label">Coste estimado (€)</label>
+          <input class="form-input" id="pf-cost" type="number" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-field">
+          <label class="form-label">Categoría</label>
+          <input class="form-input" id="pf-category" type="text" placeholder="Ej: Tazas, Wax Melt, Aluminios...">
+        </div>
+      </div>
+      <div class="form-field">
+        <label class="form-label">Proveedor habitual</label>
+        <select class="form-select" id="pf-provider"></select>
+      </div>
+      <div class="form-field">
+        <label class="form-label">Fotos para catálogo</label>
+        <div class="photo-upload-area" onclick="document.getElementById('product-photo-input').click()">
+          📷 Toca para añadir fotos del producto
+        </div>
+        <input type="file" id="product-photo-input" accept="image/*" multiple style="display:none" onchange="handleProductPhotoAdd(event)">
+        <div class="photo-grid" id="product-photo-preview-grid"></div>
       </div>
       <div class="form-field">
         <label class="form-label">Notas internas</label>
-        <textarea class="form-textarea" id="pf-notes" placeholder="Coste, proveedor, detalles de producción..."></textarea>
+        <textarea class="form-textarea" id="pf-notes" placeholder="Proveedor, detalles de producción, ideas de venta..."></textarea>
       </div>
     </div>
   </div>

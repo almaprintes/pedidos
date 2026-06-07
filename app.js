@@ -5,7 +5,7 @@
 
 // ─── DB ──────────────────────────────────────────────
 const DB_NAME = 'almaprint_db';
-const DB_VER  = 7;
+const DB_VER  = 8;
 let db;
 
 function openDB() {
@@ -160,7 +160,6 @@ let expenses = [];
 let businessTab = 'resumen';
 let currentClient = null;
 let currentProduct = null;
-let detailReturnTarget = null;
 let editingClientId = null;
 let editingProductId = null;
 let clientSearch = '';
@@ -175,6 +174,7 @@ let listFilter = 'todos';
 let listSearch = '';
 let detailTab = 'info';
 let formPhotos = []; // base64 strings
+let productFormPhotos = []; // fotos del catálogo/producto
 
 // ─── UTILS ───────────────────────────────────────────
 function uid() {
@@ -598,27 +598,13 @@ function clientListCard(c) {
 
 function openClientDetail(id) {
   currentClient = clients.find(c => c.id === id);
-  if (!currentClient) {
-    showToast('Cliente no encontrado');
-    return;
-  }
-
-  const detailView = document.getElementById('detail-view');
-  if (detailView) detailView.classList.remove('active');
-
+  if (!currentClient) return;
   renderClientDetail();
   document.getElementById('client-detail-view').classList.add('active');
 }
 
 function closeClientDetail() {
-  const view = document.getElementById('client-detail-view');
-  if (view) view.classList.remove('active');
-}
-
-function openOrderFromClient(orderId, clientId) {
-  detailReturnTarget = { type: 'client', id: clientId };
-  closeClientDetail();
-  openDetail(orderId);
+  document.getElementById('client-detail-view').classList.remove('active');
 }
 
 function renderClientDetail() {
@@ -649,7 +635,7 @@ function renderClientDetail() {
     <div class="section-title">Pedidos del cliente</div>
     <div class="order-list">
 ${clientOrders.length ? clientOrders.map(o => `
-<div class="list-card ${getPrioCss(o.priority)}" onclick="openOrderFromClient('${o.id}', '${c.id}')">
+<div class="list-card ${getPrioCss(o.priority)}" onclick="openDetail('${o.id}')">
     <div class="list-card-body">
       <div class="list-card-top">
         <span class="list-card-name">${escHtml(o.product || 'Producto sin nombre')}</span>
@@ -842,7 +828,7 @@ function refreshProductSelect(selectedId = '') {
   const select = document.getElementById('f-product-select');
   if (!select) return;
 
-  const sorted = [...products].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  const sorted = [...products].filter(p => !p.archived).sort((a, b) => a.name.localeCompare(b.name, 'es'));
   select.innerHTML = '<option value="">— Selecciona producto —</option>' + sorted.map(p => {
     const price = p.price ? ' · ' + String(p.price).replace('.', ',') + ' €' : '';
     return `<option value="${escHtml(p.id)}">${escHtml(p.name)}${price}</option>`;
@@ -872,11 +858,13 @@ function renderProducts() {
   if (!list) return;
 
   const q = normalizeProductName(productSearch);
-  let filtered = [...products];
+  let filtered = products.filter(p => !p.archived);
   if (q) {
     filtered = filtered.filter(p =>
       p.normalizedName.includes(q) ||
-      normalizeProductName(p.description).includes(q)
+      normalizeProductName(p.description).includes(q) ||
+      normalizeProductName(p.category).includes(q) ||
+      normalizeProductName(p.notes).includes(q)
     );
   }
 
@@ -893,12 +881,15 @@ function productListCard(p) {
   const productOrders = orders.filter(o => o.productId === p.id || normalizeProductName(o.product) === p.normalizedName);
   const total = productOrders.reduce((sum, o) => sum + toNumber(o.paid || o.price), 0);
   const price = p.price ? `${String(p.price).replace('.', ',')} €` : 'Sin precio';
-  return `<div class="client-card" onclick="openProductDetail('${p.id}')">
-    <div class="client-avatar">🏷️</div>
+  const cost = toNumber(p.cost);
+  const margin = p.price ? toNumber(p.price) - cost : 0;
+  const thumb = Array.isArray(p.photos) && p.photos.length ? p.photos[0] : '';
+  return `<div class="client-card product-card" onclick="openProductDetail('${p.id}')">
+    <div class="product-thumb">${thumb ? `<img src="${thumb}" alt="${escHtml(p.name)}">` : '🏷️'}</div>
     <div class="client-card-body">
       <div class="client-card-name">${escHtml(p.name)}</div>
-      <div class="client-card-phone">${escHtml(price)}</div>
-      <div class="client-card-meta">${productOrders.length} pedido${productOrders.length !== 1 ? 's' : ''} · ${total.toFixed(2).replace('.', ',')} €</div>
+      <div class="client-card-phone">${escHtml(price)}${cost ? ` · Coste ${formatMoney(cost)}` : ''}</div>
+      <div class="client-card-meta">${productOrders.length} pedido${productOrders.length !== 1 ? 's' : ''} · ${total.toFixed(2).replace('.', ',')} €${margin ? ` · Margen ${formatMoney(margin)}` : ''}</div>
     </div>
     <span class="settings-item-arrow">›</span>
   </div>`;
@@ -925,20 +916,33 @@ function renderProductDetail() {
     .filter(o => o.productId === p.id || normalizeProductName(o.product) === p.normalizedName)
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const total = productOrders.reduce((sum, o) => sum + toNumber(o.paid || o.price), 0);
+  const price = toNumber(p.price);
+  const cost = toNumber(p.cost);
+  const margin = price - cost;
+  const marginPct = price > 0 ? Math.round((margin / price) * 100) : 0;
+  const photos = Array.isArray(p.photos) ? p.photos : [];
+  const providerName = p.providerId ? getProviderName(p.providerId, '') : (p.provider || '');
   body.innerHTML = `
     <div class="client-summary-card">
+      ${photos.length ? `<div class="product-hero-photo"><img src="${photos[0]}" onclick="viewPhoto('${photos[0]}')"></div>` : ''}
       <div class="client-summary-name">${escHtml(p.name)}</div>
-      <div class="client-summary-phone">${p.price ? '💶 ' + escHtml(String(p.price).replace('.', ',')) + ' €' : 'Sin precio'}</div>
+      <div class="client-summary-phone">${price ? '💶 ' + formatMoney(price) : 'Sin precio'}${cost ? ' · Coste ' + formatMoney(cost) : ''}</div>
+      ${p.category ? `<div class="client-summary-notes">Categoría: ${escHtml(p.category)}</div>` : ''}
+      ${providerName ? `<div class="client-summary-notes">Proveedor: ${escHtml(providerName)}</div>` : ''}
       ${p.description ? `<div class="client-summary-notes">${escHtml(p.description)}</div>` : ''}
       ${p.notes ? `<div class="client-summary-notes">${escHtml(p.notes)}</div>` : ''}
       <div class="client-summary-stats">
         <div><strong>${productOrders.length}</strong><span>Pedidos</span></div>
         <div><strong>${total.toFixed(2).replace('.', ',')} €</strong><span>Total</span></div>
+        <div><strong>${margin ? formatMoney(margin) : '—'}</strong><span>Margen</span></div>
+        <div><strong>${marginPct ? marginPct + '%' : '—'}</strong><span>% margen</span></div>
       </div>
       <div class="client-summary-actions">
         <button class="modal-btn modal-btn-secondary" onclick="openEditProductForm('${p.id}')">Editar</button>
+        <button class="modal-btn modal-btn-danger" onclick="deleteProduct('${p.id}')">Eliminar</button>
       </div>
     </div>
+    ${photos.length > 1 ? `<div class="section-title">Galería de producto</div><div class="product-gallery">${photos.map(photo => `<img src="${photo}" onclick="viewPhoto('${photo}')">`).join('')}</div>` : ''}
     <div class="section-title">Pedidos con este producto</div>
     <div class="order-list">
       ${productOrders.length ? productOrders.map(orderListCard).join('') : '<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">Sin pedidos</div></div>'}
@@ -947,12 +951,18 @@ function renderProductDetail() {
 
 function openNewProductForm(returnToOrderForm = false) {
   editingProductId = null;
+  productFormPhotos = [];
   orderFormReturnAfterProduct = !!returnToOrderForm;
   document.getElementById('product-form-title').textContent = 'Nuevo producto';
   document.getElementById('pf-name').value = '';
   document.getElementById('pf-description').value = '';
   document.getElementById('pf-price').value = '';
+  document.getElementById('pf-cost').value = '';
+  document.getElementById('pf-category').value = '';
+  document.getElementById('pf-provider').innerHTML = providerOptionList('');
+  document.getElementById('pf-provider').value = '';
   document.getElementById('pf-notes').value = '';
+  renderProductFormPhotos();
   document.getElementById('product-form-view').classList.add('active');
 }
 
@@ -960,23 +970,63 @@ function openEditProductForm(id) {
   const p = products.find(x => x.id === id) || currentProduct;
   if (!p) return;
   editingProductId = p.id;
+  currentProduct = p;
+  productFormPhotos = Array.isArray(p.photos) ? [...p.photos] : [];
   orderFormReturnAfterProduct = false;
   document.getElementById('product-form-title').textContent = 'Editar producto';
   document.getElementById('pf-name').value = p.name || '';
   document.getElementById('pf-description').value = p.description || '';
   document.getElementById('pf-price').value = p.price || '';
+  document.getElementById('pf-cost').value = p.cost || '';
+  document.getElementById('pf-category').value = p.category || '';
+  document.getElementById('pf-provider').innerHTML = providerOptionList(p.providerId || '');
+  document.getElementById('pf-provider').value = p.providerId || '';
   document.getElementById('pf-notes').value = p.notes || '';
+  renderProductFormPhotos();
   document.getElementById('product-form-view').classList.add('active');
 }
 
 function closeProductForm() {
   document.getElementById('product-form-view').classList.remove('active');
+  productFormPhotos = [];
+}
+
+function handleProductPhotoAdd(e) {
+  const files = Array.from(e.target.files || []);
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      productFormPhotos.push(ev.target.result);
+      renderProductFormPhotos();
+    };
+    reader.readAsDataURL(file);
+  });
+  e.target.value = '';
+}
+
+function removeProductPhoto(idx) {
+  productFormPhotos.splice(idx, 1);
+  renderProductFormPhotos();
+}
+
+function renderProductFormPhotos() {
+  const grid = document.getElementById('product-photo-preview-grid');
+  if (!grid) return;
+  grid.innerHTML = productFormPhotos.map((p, i) =>
+    `<div style="position:relative;display:inline-block">
+      <img class="photo-thumb" src="${p}">
+      <button class="photo-remove" onclick="removeProductPhoto(${i})">×</button>
+    </div>`
+  ).join('');
 }
 
 async function saveProductForm() {
   const name = document.getElementById('pf-name').value.trim();
   const description = document.getElementById('pf-description').value.trim();
   const price = document.getElementById('pf-price').value || '';
+  const cost = document.getElementById('pf-cost').value || '';
+  const category = document.getElementById('pf-category').value.trim();
+  const providerId = document.getElementById('pf-provider').value || '';
   const notes = document.getElementById('pf-notes').value.trim();
   if (!name) { showToast('Escribe el nombre del producto'); return; }
 
@@ -987,7 +1037,12 @@ async function saveProductForm() {
   if (existing) {
     existing.description = description || existing.description || '';
     existing.price = price || existing.price || '';
+    existing.cost = cost || existing.cost || '';
+    existing.category = category || existing.category || '';
+    existing.providerId = providerId || existing.providerId || '';
     existing.notes = notes || existing.notes || '';
+    existing.photos = productFormPhotos.length ? [...productFormPhotos] : (existing.photos || []);
+    existing.archived = false;
     existing.updatedAt = now;
     await dbPut('products', existing);
     products = products.map(p => p.id === existing.id ? existing : p);
@@ -1005,10 +1060,15 @@ async function saveProductForm() {
     product.normalizedName = normalizedName;
     product.description = description;
     product.price = price;
+    product.cost = cost;
+    product.category = category;
+    product.providerId = providerId;
     product.notes = notes;
+    product.photos = [...productFormPhotos];
+    product.archived = false;
     product.updatedAt = now;
   } else {
-    product = { id: uid(), name, normalizedName, description, price, notes, createdAt: now, updatedAt: now, lastOrderAt: null };
+    product = { id: uid(), name, normalizedName, description, price, cost, category, providerId, notes, photos: [...productFormPhotos], archived: false, createdAt: now, updatedAt: now, lastOrderAt: null };
   }
 
   await dbPut('products', product);
@@ -1021,6 +1081,31 @@ async function saveProductForm() {
   showToast(editingProductId ? 'Producto actualizado' : 'Producto creado ✓');
   renderProducts();
   if (currentProduct?.id === product.id) { currentProduct = product; renderProductDetail(); }
+}
+
+async function deleteProduct(id) {
+  const product = products.find(p => p.id === id);
+  if (!product) return;
+  const used = orders.some(o => o.productId === id || normalizeProductName(o.product) === product.normalizedName);
+  if (used) {
+    if (!confirm('Este producto tiene pedidos asociados. Se ocultará de la lista, pero seguirá visible en los pedidos antiguos. ¿Continuar?')) return;
+    product.archived = true;
+    product.updatedAt = Date.now();
+    await dbPut('products', product);
+    products = products.map(p => p.id === id ? product : p);
+    closeProductDetail();
+    renderProducts();
+    refreshProductSelect();
+    showToast('Producto archivado');
+    return;
+  }
+  if (!confirm('¿Eliminar este producto definitivamente?')) return;
+  await dbDelete('products', id);
+  products = products.filter(p => p.id !== id);
+  closeProductDetail();
+  renderProducts();
+  refreshProductSelect();
+  showToast('Producto eliminado');
 }
 
 async function migrateOrdersToProducts() {
@@ -1269,7 +1354,8 @@ function normalizeInvoiceLine(line = {}) {
     taxPercent,
     taxAmount,
     totalLine,
-    notes: String(pick(line, ['notas', 'notes', 'observaciones'], '')).trim()
+    notes: String(pick(line, ['notas', 'notes', 'observaciones'], '')).trim(),
+    productAlmaprint: String(pick(line, ['producto_almaprint', 'productoAlmaprint', 'producto_interno'], '')).trim()
   };
 }
 
@@ -1755,19 +1841,16 @@ function openDetail(id) {
 }
 
 function closeDetail() {
-  const detailView = document.getElementById('detail-view');
-  if (detailView) detailView.classList.remove('active');
+  document.getElementById('detail-view').classList.remove('active');
 
-  const target = detailReturnTarget;
-  detailReturnTarget = null;
-
-  if (target?.type === 'client') {
-    openClientDetail(target.id);
-    return;
+  const clientDetail = document.getElementById('client-detail-view');
+  if (clientDetail && clientDetail.classList.contains('active') && currentClient) {
+    renderClientDetail();
   }
 
-  if (target?.type === 'product') {
-    openProductDetail(target.id);
+  const productDetail = document.getElementById('product-detail-view');
+  if (productDetail && productDetail.classList.contains('active') && currentProduct) {
+    renderProductDetail();
   }
 }
 
@@ -1793,10 +1876,10 @@ function renderDetailView() {
 
 function renderDetailTab(tab) {
   detailTab = tab;
-document.querySelectorAll('#detail-view .detail-tab').forEach(t => {
+  document.querySelectorAll('#detail-view .detail-tab').forEach(t => {
     t.classList.toggle('active', t.dataset.tab === tab);
   });
-document.querySelectorAll('#detail-view .detail-tab-content').forEach(c => {
+  document.querySelectorAll('#detail-view .detail-tab-content').forEach(c => {
     c.classList.toggle('active', c.id === 'dtab-' + tab);
   });
   const o = currentOrder;
@@ -2187,7 +2270,7 @@ function closeModal(id) {
 
 // ─── SETTINGS ────────────────────────────────────────
 async function exportBackup() {
-  const data = { version: 7, appVersion: '1.5.4', exportedAt: new Date().toISOString(), orders, clients, products, providers, expenses };
+  const data = { version: 8, appVersion: '1.5.5', exportedAt: new Date().toISOString(), orders, clients, products, providers, expenses };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
