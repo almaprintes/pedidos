@@ -483,7 +483,12 @@ function renderList() {
   else if (listFilter === 'sinfecha') filtered = filtered.filter(o => !o.deliveryDate && o.status !== 'entregado');
   else if (listFilter === 'seguimiento') filtered = filtered.filter(o => o.followup);
   else if (listFilter === 'aprobacion') filtered = filtered.filter(o => o.status === 'aprobacion');
-  else if (listFilter === 'cobro') filtered = filtered.filter(o => (o.payment === 'pendiente' || o.payment === 'senal') && o.status !== 'entregado');
+else if (listFilter === 'cobro')
+  filtered = filtered.filter(o => {
+    const price = toNumber(o.price);
+    const paid = toNumber(o.paid);
+    return price > paid;
+  });
   else if (listFilter === 'produccion') filtered = filtered.filter(o => o.status === 'produccion');
   else if (listFilter === 'entregados') filtered = filtered.filter(o => o.status === 'entregado');
   else if (listFilter !== 'todos') filtered = filtered.filter(o => o.status !== 'entregado');
@@ -513,6 +518,11 @@ function renderList() {
 
 function orderListCard(o) {
   const st = getStatus(o.status);
+   const pendienteCobro =
+  toNumber(o.price) > toNumber(o.paid);
+
+const entregadoSinCobrar =
+  o.status === 'entregado' && pendienteCobro;
   return `<div class="list-card ${getPrioCss(o.priority)}" onclick="openDetail('${o.id}')">
     <div class="list-card-body">
       <div class="list-card-top">
