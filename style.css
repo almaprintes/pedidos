@@ -124,18 +124,29 @@ h3 { font-size: 1rem; font-weight: 600; }
 
 /* ===== LOGO ===== */
 .app-logo {
-  display: flex; align-items: center; gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
-.logo-mark {
-  width: 32px; height: 32px;
-  background: linear-gradient(135deg, var(--pink), var(--purple));
-  border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
-  color: white; font-family: var(--font-display); font-size: 1rem; font-weight: 700;
-}
-.logo-text { font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; }
-.logo-text span { color: var(--pink); }
 
+.logo-mark {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: block;
+  object-fit: cover;
+}
+
+.logo-text {
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.logo-text span {
+  color: var(--purple);
+}
 /* ===== DASHBOARD ===== */
 .dash-grid {
   display: grid;
