@@ -611,7 +611,7 @@ function clientListCard(c) {
   return `<div class="client-card" onclick="openClientDetail('${c.id}')">
     <div class="client-avatar">${initials(c.name)}</div>
     <div class="client-card-body">
-      <div class="client-card-name">${escHtml(c.name)}</div>
+<div class="client-card-name">${escHtml(clientDisplayName(c))}</div>
       <div class="client-card-phone">${c.phone ? '📱 ' + escHtml(c.phone) : 'Sin teléfono'}</div>
       <div class="client-card-meta">${clientOrders.length} pedido${clientOrders.length !== 1 ? 's' : ''} · ${total.toFixed(2).replace('.', ',')} € · ${last}</div>
     </div>
@@ -635,14 +635,14 @@ function renderClientDetail() {
   const body = document.getElementById('client-detail-body');
   const title = document.getElementById('client-detail-title');
   if (!c || !body || !title) return;
-  title.textContent = c.name;
+title.textContent = clientDisplayName(c);
   const clientOrders = orders
     .filter(o => o.clientId === c.id || normalizeClientName(o.client) === c.normalizedName)
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const total = clientOrders.reduce((sum, o) => sum + toNumber(o.paid || o.price), 0);
   body.innerHTML = `
     <div class="client-summary-card">
-      <div class="client-summary-name">${escHtml(c.name)}</div>
+<div class="client-summary-name">${escHtml(clientDisplayName(c))}</div>
       <div class="client-summary-phone">${c.phone ? '📱 ' + escHtml(c.phone) : 'Sin teléfono'}</div>
       ${c.notes ? `<div class="client-summary-notes">${escHtml(c.notes)}</div>` : ''}
       <div class="client-summary-stats">
