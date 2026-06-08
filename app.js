@@ -2059,7 +2059,7 @@ function sendWhatsApp(id) {
   const o = orders.find(x => x.id === id) || currentOrder;
   if (!o || !o.phone) { showToast('Sin teléfono'); return; }
 
-const templates = getWhatsAppMessages();
+  const templates = getWhatsAppMessages();
 
   const stateKey = (o.status || 'seguimiento')
     .toLowerCase()
@@ -2068,8 +2068,11 @@ const templates = getWhatsAppMessages();
 
   let tpl = templates[stateKey] || templates.seguimiento;
 
+  const linkedClient = clients.find(c => c.id === o.clientId);
+  const waClientName = linkedClient?.name || o.client || '';
+
   const msg = tpl
-    .replaceAll('{cliente}', o.client || '')
+    .replaceAll('{cliente}', waClientName)
     .replaceAll('{producto}', o.product || '')
     .replaceAll('{estado}', o.status || '')
     .replaceAll('{fecha}', new Date().toLocaleDateString());
