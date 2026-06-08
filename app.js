@@ -684,6 +684,7 @@ function openNewClientForm(returnToOrderForm = false) {
   orderFormReturnAfterClient = !!returnToOrderForm;
   document.getElementById('client-form-title').textContent = 'Nuevo cliente';
   document.getElementById('cf-name').value = '';
+ document.getElementById('cf-alias').value = '';
   document.getElementById('cf-phone').value = '';
   document.getElementById('cf-notes').value = '';
   document.getElementById('client-form-view').classList.add('active');
@@ -708,7 +709,8 @@ function openEditClientForm(id) {
 
   document.getElementById('client-form-title').textContent = 'Editar cliente';
   document.getElementById('cf-name').value = c.name || '';
-  document.getElementById('cf-phone').value = c.phone || '';
+ document.getElementById('cf-alias').value = c.alias || '';
+   document.getElementById('cf-phone').value = c.phone || '';
   document.getElementById('cf-notes').value = c.notes || '';
 
   form.classList.add('active');
@@ -720,7 +722,8 @@ function closeClientForm() {
 
 async function saveClientForm() {
   const name = document.getElementById('cf-name').value.trim();
-  const phone = document.getElementById('cf-phone').value.trim();
+ const alias = document.getElementById('cf-alias').value.trim();
+   const phone = document.getElementById('cf-phone').value.trim();
   const notes = document.getElementById('cf-notes').value.trim();
   if (!name) { showToast('Escribe el nombre del cliente'); return; }
 
@@ -729,8 +732,9 @@ async function saveClientForm() {
   let existing = clients.find(c => c.normalizedName === normalizedName && c.id !== editingClientId);
 
   if (existing) {
-    existing.phone = phone || existing.phone || '';
-    existing.notes = notes || existing.notes || '';
+existing.alias = alias;
+existing.phone = phone || existing.phone || '';
+existing.notes = notes || existing.notes || '';
     existing.updatedAt = now;
     await dbPut('clients', existing);
     clients = clients.map(c => c.id === existing.id ? existing : c);
@@ -744,13 +748,14 @@ async function saveClientForm() {
 
   let client = editingClientId ? clients.find(c => c.id === editingClientId) : null;
   if (client) {
-    client.name = name;
-    client.normalizedName = normalizedName;
-    client.phone = phone;
-    client.notes = notes;
-    client.updatedAt = now;
+client.name = name;
+client.alias = alias;
+client.normalizedName = normalizedName;
+client.phone = phone;
+client.notes = notes;
+client.updatedAt = now;
   } else {
-    client = { id: uid(), name, normalizedName, phone, notes, createdAt: now, updatedAt: now, lastOrderAt: null };
+    client = { id: uid(), name, alias, normalizedName, phone, notes, createdAt: now, updatedAt: now, lastOrderAt: null };
   }
 
   await dbPut('clients', client);
