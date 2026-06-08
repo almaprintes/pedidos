@@ -241,6 +241,10 @@ function normalizeClientName(name) {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ');
 }
+function clientDisplayName(c) {
+  if (!c) return '';
+  return [c.name, c.alias].filter(Boolean).join(' ');
+}
 function findClientByName(name) {
   const normalizedName = normalizeClientName(name);
   if (!normalizedName) return null;
@@ -295,7 +299,7 @@ function refreshClientSelect(selectedId = '') {
 
   const sorted = [...clients].sort((a, b) => a.name.localeCompare(b.name, 'es'));
   select.innerHTML = '<option value="">— Selecciona cliente —</option>' + sorted.map(c =>
-    `<option value="${escHtml(c.id)}">${escHtml(c.name)}${c.phone ? ' · ' + escHtml(c.phone) : ''}</option>`
+    `<option value="${escHtml(c.id)}">${escHtml(clientDisplayName(c))}${c.phone ? ' · ' + escHtml(c.phone) : ''}</option>`
   ).join('');
 
   if (selectedId) select.value = selectedId;
@@ -337,7 +341,7 @@ function renderClientAutocomplete() {
 
   box.innerHTML = matches.map(c => `
     <div class="client-autocomplete-item" onclick="selectClientFromAutocomplete('${c.id}')">
-      <div class="client-autocomplete-name">${escHtml(c.name)}</div>
+<div class="client-autocomplete-name">${escHtml(clientDisplayName(c))}</div>
       ${c.phone ? `<div class="client-autocomplete-phone">${escHtml(c.phone)}</div>` : ''}
     </div>
   `).join('');
